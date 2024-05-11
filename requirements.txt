@@ -1,15 +1,9 @@
 # Actual dependencies.
-allennlp==2.10.1
-conllu==4.5.2
+git+https://github.com/houcha/allennlp
+conllu==4.5.3
 overrides==7.3.1
 attrs==23.1.0
 pandas==1.3.5
 more-itertools==9.0.0
 numpy==1.21.6
-
-# Compatibility.
-typing-extensions==4.5.0
-typer==0.4.2
-huggingface-hub==0.10.1
-urllib3==1.26.16
 

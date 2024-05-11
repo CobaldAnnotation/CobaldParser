@@ -6,8 +6,8 @@ CoBaLD parser is a neural network that allows one to annotate tokenized text (*.
 
 First, create conda environment with python3.8 and activate it.
 ```
-conda create -n envp38 python=3.8
-conda activate envp38
+conda create --name <ENV_NAME> python=3.8
+conda activate <ENV_NAME>
 ```
 
 Next install git & pip inside conda and install requirements using pip.

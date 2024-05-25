@@ -2,7 +2,7 @@
 
 # Download dataset.conllu
 git clone https://github.com/CobaldAnnotation/CobaldEng
-mv CobaldEng/train.conllu target_dataset.conllu
+mv CobaldEng/enhanced/train.conllu target_dataset.conllu
 rm -rf CobaldEng
 # Do some preprocessing and split dataset into train/validation.
 ./preprocessing.py target_dataset.conllu target_dataset_processed.conllu

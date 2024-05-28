@@ -12,6 +12,21 @@ from common.parse_conllu import parse_conllu, write_conllu
 from common.sentence import Sentence
 
 
+def extract_sentence_tagset(sentence: Sentence, tag_name: str):
+    sentence_tagset = set()
+    for token in sentence:
+        if tag_name in ["lemma_rule", "upos_feats", "semslot", "semclass", "deprel"]:
+            token_tagset = {getattr(token, tag_name)}
+        elif tag_name in ["deps"]:
+            syntax_tagset = getattr(token, tag_name)
+            assert type(syntax_tagset) is dict
+            token_tagset = {rel for head, rel in syntax_tagset.items()}
+        else:
+            raise NotImplementedError
+        sentence_tagset |= token_tagset
+    return sentence_tagset
+
+
 def build_cover_sentences(sentences: List[Sentence], tagsets_names: List[str]) -> Set[int]:
     """
     Build a set of sentences such that every tag from `tagsets` tagsets has at least one occurrence.
@@ -24,7 +39,7 @@ def build_cover_sentences(sentences: List[Sentence], tagsets_names: List[str]) -
     for sentence in sentences:
         sentence_tagsets = dict()
         for tagset_name in tagsets_names:
-            sentence_tagsets[tagset_name] = {str(getattr(token, tagset_name)) for token in sentence}
+            sentence_tagsets[tagset_name] = extract_sentence_tagset(sentence, tagset_name)
             tagsets[tagset_name] |= sentence_tagsets[tagset_name]
         sentences_tagsets.append(sentence_tagsets)
 
@@ -110,8 +125,8 @@ def train_val_split(sentences: List[Sentence], train_fraction: float, tagsets_na
 def print_dataset_statistic(sentences: List[Sentence], tagsets_names: List[str]):
     print(f"Number of sentences: {len(sentences)}")
     for tagset_name in tagsets_names:
-        tagset_size = len({getattr(token, tagset_name) for sentence in sentences for token in sentence})
-        print(f"{tagset_name} tagset size: {tagset_size}")
+        tagset = {tag for sentence in sentences for tag in extract_sentence_tagset(sentence, tagset_name)}
+        print(f"{tagset_name} tagset size: {len(tagset)}")
 
 
 if __name__ == "__main__":
@@ -143,17 +158,17 @@ if __name__ == "__main__":
 
     print("Loading sentences...")
     with open(args.dataset, 'r') as file:
-        token_lists = parse_conllu(file)
+        sentences = parse_conllu(file)
     # Modify tags.
-    for token_list in token_lists:
-        for token in token_list:
+    for sentence in sentences:
+        for token in sentence:
             token.lemma_rule = predict_lemma_rule(token.form, token.lemma) if token.form else ""
             token.upos_feats = token.upos + "&" + str(token.feats)
 
-    tagsets_names = ["lemma_rule", "upos_feats", "semslot", "semclass"]
+    tagsets_names = ["lemma_rule", "upos_feats", "semslot", "semclass", "deprel", "deps"]
 
     print("Splitting...")
-    train_sentences, val_sentences = train_val_split(token_lists, args.train_fraction, tagsets_names)
+    train_sentences, val_sentences = train_val_split(sentences, args.train_fraction, tagsets_names)
 
     print()
     print("==============================")

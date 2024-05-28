@@ -75,7 +75,6 @@ def train_val_split(sentences: List[Sentence], train_fraction: float, tagsets_na
     train_size = int(train_fraction * len(sentences))
 
     sentences_count = len(sentences)
-    train_fraction = 0.8
     train_size = int(train_fraction * sentences_count)
     val_size = sentences_count - train_size
 

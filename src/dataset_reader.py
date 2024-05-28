@@ -76,7 +76,7 @@ class ComprenoUDDatasetReader(DatasetReader):
 
         if upos_tags is not None and xpos_tags is not None and feats_tags is not None:
             joint_pos_feats = [
-                f"{upos_tag}#{xpos_tag}#" + '|'.join([f"{k}={v}" for k, v in feats_tag.items()])
+                f"{upos_tag}#{xpos_tag}#" + ('|'.join([f"{k}={v}" for k, v in feats_tag.items()]) if 0 < len(feats_tag) else '_')
                 for upos_tag, xpos_tag, feats_tag in zip(upos_tags, xpos_tags, feats_tags)
             ]
             fields['pos_feats_labels'] = SequenceLabelField(joint_pos_feats, text_field, 'pos_feats_labels')
@@ -108,7 +108,7 @@ class ComprenoUDDatasetReader(DatasetReader):
             edges_labels: List[str] = []
             for index, token_deps in enumerate(deps):
                 assert 0 < len(token_deps), f"Deps must not be empty"
-                for head, relations in token_deps.items():
+                for head, relation in token_deps.items():
                     assert 0 <= head
                     # Hack: start indexing at 0 and replace ROOT with self-loop.
                     # It makes parser implementation much easier.
@@ -121,9 +121,8 @@ class ComprenoUDDatasetReader(DatasetReader):
                         assert head != index, f"head = {head + 1} must not be equal to index = {index + 1}"
                     edge = (index, head)
                     edges.append(edge)
-                    assert len(relations) == 1, f"Multiedges are not allowed: {deps}, metadata: {metadata}"
-                    relation = relations[0]
                     edges_labels.append(relation)
+            # TODO: move from MultilabelAdjacencyField to AdjacencyField
             fields['deps_labels'] = MultilabelAdjacencyField(text_field, edges, edges_labels, 'deps_labels')
 
         if miscs is not None:

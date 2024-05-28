@@ -37,14 +37,12 @@ class Token:
 
         # Custom serialization for 'feats' tag.
         if self.feats is None:
-            feats_str = ''
+            feats_str = '_'
         else:
             assert type(self.feats) is dict
-            if len(self.feats) == 0:
-                feats_str = '_'
-            else:
-                feats_str = serialize_field(self.feats)
-        
+            assert len(self.feats) != 0
+            feats_str = serialize_field(self.feats)
+
         # Custom serialization for 'head' tag.
         if self.head is None:
             head_str = ''
@@ -59,7 +57,7 @@ class Token:
         elif len(self.deps) == 0:
             deps_str = '_'
         else:
-            deps_str = '|'.join(f"{head}:{rel}" for head, rels in self.deps.items() for rel in rels)
+            deps_str = '|'.join(f"{head}:{rel}" for head, rel in self.deps.items())
 
         return (
             f"{serialize_field(self.id)}\t"

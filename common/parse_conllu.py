@@ -59,9 +59,9 @@ def parse_deps(value: str) -> Optional[Dict[str, List[str]]]:
     deps = {}
     for dep in value.split('|'):
         head, rel = dep.split(':', 1)
-        if head not in deps:
-            deps[head] = []
-        deps[head].append(rel)
+        # Multiedges are not allowed
+        assert head not in deps
+        deps[head] = rel
     return deps
 
 

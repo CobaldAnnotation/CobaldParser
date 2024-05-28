@@ -62,9 +62,7 @@ def validate_conllu(sentences: Iterable[Sentence], verbose: bool = True) -> List
                 # Deps
                 token_heads = set()
                 assert 1 <= len(token.deps), f"{token.form} has empty deps: {token.deps}"
-                for head, rels in token.deps.items():
-                    assert len(rels) == 1, \
-                        f"Multiedges are not allowed: {rels}"
+                for head, rel in token.deps.items():
                     assert is_int(head) or head is None, \
                         f"Deps head must be either int or null (x.1). Encountered: {head}"
                     assert str(head) != str(token.id), \

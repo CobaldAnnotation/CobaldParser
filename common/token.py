@@ -37,11 +37,14 @@ class Token:
 
         # Custom serialization for 'feats' tag.
         if self.feats is None:
-            feats_str = '_'
+            # For erased tags
+            feats_str = ''
         else:
             assert type(self.feats) is dict
-            assert len(self.feats) != 0
-            feats_str = serialize_field(self.feats)
+            if len(self.feats) == 0:
+                feats_str = '_'
+            else:
+                feats_str = serialize_field(self.feats)
 
         # Custom serialization for 'head' tag.
         if self.head is None:

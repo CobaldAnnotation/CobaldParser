@@ -34,7 +34,7 @@ def main(
     print(f"Load feats weights from {feats_weights_file}.")
     feats_weights = load_dict_from_json(feats_weights_file)
 
-    print("Build scorer...")
+    print("Building scorer...")
     scorer = CobaldScorer(
         taxonomy_file,
         semclasses_out_of_taxonomy={'_'},
@@ -42,18 +42,8 @@ def main(
         feats_weights=feats_weights
     )
 
-    print("Evaluate...")
+    print("Evaluating...")
     with open(test_file_path, 'r') as test_file, open(gold_file_path, 'r') as gold_file:
-        #feats_set = {}
-        #for sent in parse_conllu_incr(test_file):
-        #    for token in sent:
-        #        feats = token.feats
-        #        if feats is not None:
-        #            for gram_cat, grammeme in feats.items():
-        #                if gram_cat not in feats_set:
-        #                    feats_set[gram_cat] = set()
-        #                feats_set[gram_cat].add(grammeme)
-        #print(f"feats: {feats_set}")
         test_sentences = parse_conllu_incr(test_file)
         gold_sentences = parse_conllu_incr(gold_file)
         scores = scorer.score_sentences(test_sentences, gold_sentences)
@@ -134,4 +124,3 @@ if __name__ == "__main__":
     print(f"Null F1: {null_f1:.{OUTPUT_PRECISION}f}")
     print(f"------------------------")
     print(f"Total: {total:.{OUTPUT_PRECISION}f}")
-

@@ -119,12 +119,8 @@ class CobaldScorer:
         if gold.semclass in self.semclasses_out_of_taxonomy:
             return test.semclass == gold.semclass
 
-        # FIXME!
-        if not self.taxonomy.has_semclass(gold.semclass):
-            print(f"Unknown gold semclass encountered: {gold.semclass}")
-            return 0.
-        #assert self.taxonomy.has_semclass(gold.semclass), \
-        #    f"Unknown gold semclass encountered: {gold.semclass}"
+        assert self.taxonomy.has_semclass(gold.semclass), \
+            f"Unknown gold semclass encountered: {gold.semclass}"
 
         if not self.taxonomy.has_semclass(test.semclass):
             return 0.
@@ -188,9 +184,6 @@ class CobaldScorer:
 
             for test_token, gold_token in zip_equal(test_sentence_aligned, gold_sentence_aligned):
                 is_mismatched = test_token.is_empty() or gold_token.is_empty()
-
-                assert test_token.form == gold_token.form or is_mismatched, \
-                    f"Error at sent_id={test_sentence.sent_id} : Tokens forms are mismatched."
 
                 # Score test_token.
                 lemma_score = self.score_lemma(test_token, gold_token) if not is_mismatched else 0.
@@ -283,21 +276,21 @@ class CobaldScorer:
 
         i, j = 0, 0
         while i < len(lhs) and j < len(rhs):
-            if lhs[i].form == rhs[j].form:
+            if lhs[i].is_null() and not rhs[j].is_null():
+                lhs_aligned.append(lhs[i])
+                rhs_aligned.append(Token.create_empty(id=f"{j}.1"))
+                i += 1
+            elif rhs[j].is_null() and not lhs[i].is_null():
+                lhs_aligned.append(Token.create_empty(id=f"{i}.1"))
+                rhs_aligned.append(rhs[j])
+                j += 1
+            else:
+                assert lhs[i].form == rhs[j].form, \
+                    f"Test-gold tokens mismatch: '{lhs[i].form}' != '{rhs[j].form}' at sent_id={lhs.sent_id}"
                 lhs_aligned.append(lhs[i])
                 rhs_aligned.append(rhs[j])
                 i += 1
                 j += 1
-            else:
-                if lhs[i].is_null():
-                    lhs_aligned.append(lhs[i])
-                    rhs_aligned.append(Token.create_empty(id=f"{j}.1"))
-                    i += 1
-                else:
-                    assert rhs[j].is_null()
-                    lhs_aligned.append(Token.create_empty(id=f"{i}.1"))
-                    rhs_aligned.append(rhs[j])
-                    j += 1
 
         if i < len(lhs):
             # lhs has extra #NULLs at the end, so append #EMPTY node to rhs

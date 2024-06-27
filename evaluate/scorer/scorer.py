@@ -232,7 +232,7 @@ class CobaldScorer:
         misc_avg_score = np.mean(misc_scores)
         semslot_avg_score = np.mean(semslot_scores)
         semclass_avg_score = np.mean(semclass_scores)
-        null_f1 = f1_score(gold_nulls, pred_nulls)
+        null_f1 = f1_score(gold_nulls, pred_nulls, zero_division=1.0)
 
         assert 0. <= lemma_avg_score <= 1.
         assert 0. <= upos_avg_score <= 1.

@@ -12,13 +12,13 @@ class Sentence:
             self._renumerate_tokens(self._tokens)
 
     @staticmethod
-    def from_conllu(conllu_tokens: TokenList) -> 'Sentence':
+    def from_conllu(conllu_tokens: TokenList, *args, **kwargs) -> 'Sentence':
         """
         Create Sentence from TokenList.
         """
         tokens = [Token(**conllu_token) for conllu_token in conllu_tokens]
         metadata = conllu_tokens.metadata
-        return Sentence(tokens, metadata)
+        return Sentence(tokens, metadata, *args, **kwargs)
 
     def __getitem__(self, index: int) -> Token:
         return self._tokens[index]

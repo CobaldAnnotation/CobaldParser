@@ -24,7 +24,7 @@ def preprocess(token_lists: List[TokenList]) -> List[Sentence]:
                 continue
             tokens.append(Token(**token))
 
-        processed_sentences.append(Sentence(tokens, token_list.metadata))
+        processed_sentences.append(Sentence(tokens, token_list.metadata, renumerate=False))
     return processed_sentences
 
 
@@ -42,7 +42,7 @@ def main(input_file_path: str, output_file_path: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description='Preprocess SEMarkup file (e.g. remove "x-y" indices), so that parser can work with it.'
+        description='Preprocess .conllu file (e.g. remove "x-y" indices), so that it\'s more convenient for parsing.'
     )
     parser.add_argument(
         'input_file',

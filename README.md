@@ -31,3 +31,8 @@ The external and the target datasets can be downloaded using appropriate scripts
 ### Inference
 
 See https://huggingface.co/CoBaLD for pretrained models and how to use them.
+
+Once output conllu file is produced, it may be processed with postprocessing.py (see data/ directory) script in order to restore range tokens (ones with x-y indices):
+```
+./postprocessing.py test.conllu model_output.conllu final_output.conllu
+```

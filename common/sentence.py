@@ -5,10 +5,11 @@ from .token import Token
 
 
 class Sentence:
-    def __init__(self, tokens: List[Token], metadata: Dict):
+    def __init__(self, tokens: List[Token], metadata: Dict, renumerate: bool = True):
         self._tokens = tokens
         self._metadata = metadata
-        self._renumerate_tokens(self._tokens)
+        if renumerate:
+            self._renumerate_tokens(self._tokens)
 
     @staticmethod
     def from_conllu(conllu_tokens: TokenList) -> 'Sentence':

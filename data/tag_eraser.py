@@ -24,7 +24,7 @@ def main(
     for token_list in tqdm(token_lists):
         clean_tokens = []
         for token in token_list:
-            if token["form"] == "#NULL" or '-' in token["id"]:
+            if token["form"] == "#NULL":
                 continue
             if erase_morphosyntax:
                 token["lemma"] = None
@@ -61,18 +61,18 @@ if __name__ == "__main__":
         help='Output conllu file with tags removed.'
     )
     parser.add_argument(
-        '--erase-morphosyntax',
-        action='store_true'
+        '--keep-morphosyntax',
+        action='store_false'
     )
     parser.add_argument(
-        '--erase-semslot',
-        action='store_true'
+        '--keep-semslot',
+        action='store_false'
     )
     parser.add_argument(
-        '--erase-semclass',
-        action='store_true'
+        '--keep-semclass',
+        action='store_false'
     )
     args = parser.parse_args()
 
-    main(args.input_file, args.output_file, args.erase_morphosyntax, args.erase_semslot, args.erase_semclass)
+    main(args.input_file, args.output_file, args.keep_morphosyntax, args.keep_semslot, args.keep_semclass)
 

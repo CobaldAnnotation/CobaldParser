@@ -30,9 +30,12 @@ The external and the target datasets can be downloaded using appropriate scripts
 
 ### Inference
 
-See https://huggingface.co/CoBaLD for pretrained models and how to use them.
+The model can be inferenced using predict.sh script, which takes model.tag.gz, input conllu and output conllu as arguments.
 
-Once output conllu file is produced, it may be processed with postprocessing.py (see data/ directory) script in order to restore range tokens (ones with x-y indices):
+Example:
 ```
-./postprocessing.py test.conllu model_output.conllu final_output.conllu
+./predict.sh serialization/distilbert-cobald-parser/model.tar.gz data/test_clean.conllu predictions/distilbert.conllu
 ```
+
+For pretrained models see dedicated page: https://huggingface.co/CoBaLD.
+

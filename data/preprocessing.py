@@ -20,7 +20,7 @@ def preprocess(token_lists: List[TokenList]) -> List[Sentence]:
         tokens = []
         for token in token_list:
             # Skip range tokens.
-            if '-' in token["id"] or token["deps"] == '_':
+            if '-' in token["id"] or ("deps" in token and token["deps"] == '_'):
                 continue
             tokens.append(Token(**token))
 

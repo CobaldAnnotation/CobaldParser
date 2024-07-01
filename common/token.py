@@ -17,7 +17,7 @@ class Token:
         deps: Dict[str, str] = None,
         misc: str = None,
         semslot: str = None,
-        semclass: str = None
+        semclass: str = None,
     ):
         self.id = str(id)
         self.form = form

@@ -5,9 +5,13 @@ from .token import Token
 
 
 class Sentence:
-    def __init__(self, tokens: List[Token], metadata: Dict, renumerate: bool = True):
+    def __init__(self, tokens: List[Token], metadata: Dict, renumerate: bool = True, prohibit_range_tokens: bool = True):
         self._tokens = tokens
         self._metadata = metadata
+        if prohibit_range_tokens:
+            for token in tokens:
+                assert '-' not in token.id, \
+                    "Range tokens (\d-\d) are not allowed in model. Probably you forgot to call preprocessing.py."
         if renumerate:
             self._renumerate_tokens(self._tokens)
 

@@ -41,7 +41,7 @@ def main(
                 token["semclass"] = None
             # Skip range tokens.
             clean_tokens.append(Token(**token))
-        clean_sentences.append(Sentence(clean_tokens, token_list.metadata, renumerate=False))
+        clean_sentences.append(Sentence(clean_tokens, token_list.metadata, renumerate=False, prohibit_range_tokens=False))
 
     write_conllu(output_file_path, clean_sentences)
 

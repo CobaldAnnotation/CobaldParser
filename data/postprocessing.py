@@ -34,11 +34,14 @@ def postprocess(orig_token_lists: List[TokenList], pred_token_lists: List[TokenL
                         range_token_insert_pos = pred_token_index
                         break
                 assert 0 <= range_token_insert_pos
+                orig_token["feats"] = {}
+                orig_token["head"] = -1
+                orig_token["deps"] = {}
                 pred_token_list.insert(range_token_insert_pos, orig_token)
 
     processed_sentences = []
     for pred_token_list in pred_token_lists:
-        processed_sentences.append(Sentence.from_conllu(pred_token_list, renumerate=False))
+        processed_sentences.append(Sentence.from_conllu(pred_token_list, renumerate=False, prohibit_range_tokens=False))
     return processed_sentences
 
 

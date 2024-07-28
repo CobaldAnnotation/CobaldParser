@@ -4,6 +4,7 @@ from typing import Dict, List
 import torch
 from torch import nn
 from torch import Tensor
+import torch.nn.functional as F
 
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models import Model
@@ -46,14 +47,15 @@ class FeedForwardClassifier(Model):
     ) -> Dict[str, Tensor]:
 
         logits = self.classifier(embeddings)
-        preds = logits.argmax(-1)
+        probs = F.softmax(logits, dim=-1)
+        preds = probs.argmax(-1)
 
         loss = torch.tensor(0.)
         if labels is not None:
             loss = self.loss(logits, labels, mask)
             self.update_metrics(logits, labels, mask)
 
-        return {'logits': logits, 'preds': preds, 'loss': loss}
+        return {'preds': preds, 'probs': probs, 'loss': loss}
 
     def loss(self, logits: Tensor, labels: Tensor, mask: Tensor) -> Tensor:
         return self.criterion(logits[mask], labels[mask])

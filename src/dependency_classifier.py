@@ -1,7 +1,10 @@
 from overrides import override
 from copy import deepcopy
 
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
+
+import logging
+logger = logging.getLogger("parser")
 
 import numpy as np
 
@@ -17,6 +20,10 @@ from allennlp.modules.matrix_attention.bilinear_matrix_attention import Bilinear
 from allennlp.training.metrics import Average, AttachmentScores
 from allennlp.nn.chu_liu_edmonds import decode_mst
 from allennlp.nn.util import replace_masked_values, get_range_vector, get_device_of, move_to_device
+
+import sys
+sys.path.append("..")
+from common.token import Token
 
 
 @Model.register('dependency_classifier')
@@ -68,14 +75,20 @@ class DependencyClassifier(Model):
         self.uas_eud = Average()
         self.las_eud = Average()
 
+        # For logging purposes.
+        self._last_sentences: List[List[Token]] = None
+
     def forward(
         self,
-        embeddings: Tensor,    # [batch_size, seq_len, embedding_dim]
-        deprel_labels: Tensor, # [batch_size, seq_len, seq_len]
-        deps_labels: Tensor,   # [batch_size, seq_len, seq_len]
-        mask_ud: Tensor,       # [batch_size, seq_len]
-        mask_eud: Tensor       # [batch_size, seq_len]
+        embeddings: Tensor,             # [batch_size, seq_len, embedding_dim]
+        deprel_labels: Tensor,          # [batch_size, seq_len, seq_len]
+        deps_labels: Tensor,            # [batch_size, seq_len, seq_len]
+        mask_ud: Tensor,                # [batch_size, seq_len]
+        mask_eud: Tensor,               # [batch_size, seq_len]
+        sentences: List[List[Token]]
     ) -> Dict[str, Tensor]:
+
+        self._last_sentences = sentences
 
         # [batch_size, seq_len, hid_dim]
         h_arc_head = self.arc_head_mlp(embeddings)
@@ -211,7 +224,10 @@ class DependencyClassifier(Model):
 
         # Select all probable arcs.
         # [batch_size, seq_len, seq_len]
-        pred_arcs = torch.sigmoid(s_arc).round().long()
+        arc_probs = torch.sigmoid(s_arc)
+        pred_arcs = arc_probs.round().long()
+
+        self._maybe_log_eud_arc_probs(arc_probs)
 
         # Select the most probable rel for each arc.
         # [batch_size, seq_len, seq_len]
@@ -422,4 +438,25 @@ class DependencyClassifier(Model):
         rels_filtered[nonzero_arcs_positions] = rels_one_hot[nonzero_arcs_positions]
         # Now rels_filtered has one-hot vector at [i, j, k] position iff i-th batch has (j, k) arc.
         return rels_filtered.nonzero()
-        
+
+    def _maybe_log_eud_arc_probs(self, arc_probs: Tensor):
+        assert len(arc_probs.shape) == 3
+
+        if len(arc_probs) == 1:
+            # [seq_len, seq_len]
+            arc_probs = arc_probs.squeeze().numpy()
+
+            assert len(self._last_sentences) == 1
+            sentence = self._last_sentences[0]
+
+            logger.info(f"Deps (E-UD) arc probabilities:")
+            logger.info("     " + " ".join(f"{token.id:4}" for token in sentence))
+
+            assert len(sentence) == len(arc_probs)
+            for token, row in zip(sentence, arc_probs):
+                row_str = np.array2string(row, precision=2, floatmode='fixed', max_line_width=250, suppress_small=True)
+                row_str_pretty = " ".join(f"{val_str[1:]:4}" if val_str != '0.00' else '    ' for val_str in row_str[1:-1].split())
+                logger.info(f"{token.id:4} {row_str_pretty}")
+
+            logger.info(f"----------------------------------------------------------")
+

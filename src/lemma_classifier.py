@@ -63,12 +63,11 @@ class LemmaClassifier(FeedForwardClassifier):
     ) -> Dict[str, Tensor]:
 
         output = super().forward(embeddings, labels, mask)
-        logits, preds, loss = output['logits'], output['preds'], output['loss']
+        preds, probs, loss = output['preds'], output['probs'], output['loss']
 
         # During the inference try to avoid malformed lemmas using external dictionary (if provided).
         if not self.training and self.dictionary:
             # Find top most confident lemma rules for each token.
-            probs = torch.nn.functional.softmax(logits, dim=-1)
             top_rules = torch.topk(probs, k=self.topk, dim=-1).indices.cpu().numpy()
 
             for i in range(len(metadata)):

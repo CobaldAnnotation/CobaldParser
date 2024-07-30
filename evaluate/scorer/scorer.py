@@ -19,12 +19,12 @@ from common.sentence import Sentence
 class CobaldScorer:
     def __init__(
         self,
-        taxonomy_file: str,
-        semclasses_out_of_taxonomy: set,
+        taxonomy_file: str = None,
+        semclasses_out_of_taxonomy: set = {},
         lemma_weights: Dict[str, float] = None,
         feats_weights: Dict[str, float] = None
     ):
-        self.taxonomy = Taxonomy(taxonomy_file)
+        self.taxonomy = Taxonomy(taxonomy_file) if taxonomy_file is not None else None
         self.semclasses_out_of_taxonomy = set(semclasses_out_of_taxonomy)
         self.lemma_weights = lemma_weights
         self.feats_weights = feats_weights
@@ -119,6 +119,7 @@ class CobaldScorer:
         if gold.semclass in self.semclasses_out_of_taxonomy:
             return test.semclass == gold.semclass
 
+        assert self.taxonomy is not None
         assert self.taxonomy.has_semclass(gold.semclass), \
             f"Unknown gold semclass encountered: {gold.semclass}"
 

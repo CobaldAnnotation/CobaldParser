@@ -74,14 +74,6 @@ class MorphoSyntaxSemanticParser(Model):
             in_dim=embedding_dim,
             n_classes=vocab.get_vocab_size("misc_labels"),
         )
-        self.semslot_classifier = semslot_classifier.construct(
-            in_dim=embedding_dim,
-            n_classes=vocab.get_vocab_size("semslot_labels"),
-        )
-        self.semclass_classifier = semclass_classifier.construct(
-            in_dim=embedding_dim,
-            n_classes=vocab.get_vocab_size("semclass_labels"),
-        )
         self.null_classifier = null_classifier.construct(
             indexer=indexer,
             embedder=embedder,
@@ -133,11 +125,6 @@ class MorphoSyntaxSemanticParser(Model):
         # Mask nulls for basic UD and don't mask for E-UD.
         syntax = self.dependency_classifier(embeddings, deprel_labels, deps_labels, mask & (~null_mask), mask, sentences_with_nulls)
         misc = self.misc_classifier(embeddings, misc_labels, mask)
-        semslot = self.semslot_classifier(embeddings, semslot_labels, mask)
-        semclass = self.semclass_classifier(embeddings, semclass_labels, mask)
-
-        self._maybe_log_preds_and_probs("Semantic slots:", semslot['probs'][0], "semslot_labels", sentences_with_nulls)
-        self._maybe_log_preds_and_probs("Semantic classes:", semclass['probs'][0], "semclass_labels", sentences_with_nulls)
 
         loss = lemma_rule['loss'] \
             + pos_feats['loss'] \
@@ -146,8 +133,6 @@ class MorphoSyntaxSemanticParser(Model):
             + syntax['arc_loss_eud'] \
             + syntax['rel_loss_eud'] \
             + misc['loss'] \
-            + semslot['loss'] \
-            + semclass['loss'] \
             + null_loss
 
         return {
@@ -157,8 +142,6 @@ class MorphoSyntaxSemanticParser(Model):
             'syntax_ud': syntax['syntax_ud'],
             'syntax_eud': syntax['syntax_eud'],
             'misc_preds': misc['preds'],
-            'semslot_preds': semslot['preds'],
-            'semclass_preds': semclass['preds'],
             'loss': loss,
             'metadata': metadata,
         }
@@ -176,9 +159,6 @@ class MorphoSyntaxSemanticParser(Model):
         las_eud = syntax_metrics['EUD-LAS']
         # Misc
         misc_accuracy = self.misc_classifier.get_metrics(reset)['Accuracy']
-        # Semantic.
-        semslot_accuracy = self.semslot_classifier.get_metrics(reset)['Accuracy']
-        semclass_accuracy = self.semclass_classifier.get_metrics(reset)['Accuracy']
         # Average.
         mean_accuracy = np.mean([
             lemma_accuracy,
@@ -188,8 +168,6 @@ class MorphoSyntaxSemanticParser(Model):
             uas_eud,
             las_eud,
             misc_accuracy,
-            semslot_accuracy,
-            semclass_accuracy
         ])
         # Nulls (do not average).
         null_metrics = self.null_classifier.get_metrics(reset)
@@ -206,8 +184,6 @@ class MorphoSyntaxSemanticParser(Model):
             'EUD-UAS': uas_eud,
             'EUD-LAS': las_eud,
             'Misc': misc_accuracy,
-            'SS': semslot_accuracy,
-            'SC': semclass_accuracy,
             'Avg': mean_accuracy
         }
 
@@ -271,8 +247,8 @@ class MorphoSyntaxSemanticParser(Model):
         deps = ['|'.join(dep) if dep else '_' for dep in deps]
 
         miscs = self._decode_predictions(output["misc_preds"][0], "misc_labels")
-        semslots = self._decode_predictions(output["semslot_preds"][0], "semslot_labels")
-        semclasses = self._decode_predictions(output["semclass_preds"][0], "semclass_labels")
+        semslots = ['_' for _ in range(len(sentence))]
+        semclasses = ['_' for _ in range(len(sentence))]
 
         metadata = output["metadata"][0]
 

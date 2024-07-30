@@ -450,12 +450,12 @@ class DependencyClassifier(Model):
             sentence = self._last_sentences[0]
 
             logger.info(f"Deps (E-UD) arc probabilities:")
-            logger.info("     " + " ".join(f"{token.id:4}" for token in sentence))
+            logger.info("     " + " ".join(f"{token.id:^4}" for token in sentence))
 
             assert len(sentence) == len(arc_probs)
             for token, row in zip(sentence, arc_probs):
                 row_str = np.array2string(row, precision=2, floatmode='fixed', max_line_width=250, suppress_small=True)
-                row_str_pretty = " ".join(f"{val_str[1:]:4}" if val_str != '0.00' else '    ' for val_str in row_str[1:-1].split())
+                row_str_pretty = " ".join(f"{val_str[1:]:^4}" if val_str != '0.00' else '    ' for val_str in row_str[1:-1].split())
                 logger.info(f"{token.id:4} {row_str_pretty}")
 
             logger.info(f"----------------------------------------------------------")

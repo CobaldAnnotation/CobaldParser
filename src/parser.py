@@ -316,7 +316,7 @@ class MorphoSyntaxSemanticParser(Model):
             logger.info(f"sent_id = {sentence_metadata['sent_id']}")
             logger.info(f"text = {sentence_metadata['text']}")
             logger.info(f"----------------------------------------------------------")
-    
+
     def _maybe_log_preds_and_probs(self, message: str, probs: Tensor, namespace: str, sentences: List[Token]):
         """
         Log predictions and their probabilities for each token.
@@ -332,9 +332,12 @@ class MorphoSyntaxSemanticParser(Model):
             pred_probs, pred_ids = torch.max(probs, dim=-1)
             pred_labels = self._decode_predictions(pred_ids, namespace)
 
+            max_token_char_len = max(len(token.form) for token in sentence)
+            max_label_char_len = max(len(label) for label in pred_labels)
+
             logger.info(message)
-            logger.info(f"ID\tForm           Prediction                       Probability")
+            logger.info(f"ID\t{'Form':{max_token_char_len}} {'Prediction':{max_label_char_len}} Probability")
             for token, pred_label, pred_prob in zip(sentence, pred_labels, pred_probs):
-                logger.info(f"{token.id}\t{token.form:<15}\t{pred_label:<32} {pred_prob:.2f}")
+                logger.info(f"{token.id}\t{token.form:{max_token_char_len}} {pred_label:{max_label_char_len}} {pred_prob:.2f}")
             logger.info(f"----------------------------------------------------------")
 

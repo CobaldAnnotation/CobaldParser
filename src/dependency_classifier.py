@@ -444,7 +444,7 @@ class DependencyClassifier(Model):
 
         if len(arc_probs) == 1:
             # [seq_len, seq_len]
-            arc_probs = arc_probs.squeeze().numpy()
+            arc_probs = arc_probs.squeeze().cpu().numpy()
 
             assert len(self._last_sentences) == 1
             sentence = self._last_sentences[0]

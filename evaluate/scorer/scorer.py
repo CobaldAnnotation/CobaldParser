@@ -275,18 +275,21 @@ class CobaldScorer:
         """
         lhs_aligned, rhs_aligned = [], []
 
+        is_null_or_empty = lambda token: token.is_null() or token.is_empty()
+
         i, j = 0, 0
         while i < len(lhs) and j < len(rhs):
-            if lhs[i].is_null() and not rhs[j].is_null():
+            if is_null_or_empty(lhs[i]) and not is_null_or_empty(rhs[j]):
                 lhs_aligned.append(lhs[i])
                 rhs_aligned.append(Token.create_empty(id=f"{j}.1"))
                 i += 1
-            elif rhs[j].is_null() and not lhs[i].is_null():
+            elif is_null_or_empty(rhs[j]) and not is_null_or_empty(lhs[i]):
                 lhs_aligned.append(Token.create_empty(id=f"{i}.1"))
                 rhs_aligned.append(rhs[j])
                 j += 1
             else:
-                assert lhs[i].form == rhs[j].form, \
+                # Either the forms match, or both tokens are empty.
+                assert lhs[i].form == rhs[j].form or is_null_or_empty(lhs[i]) and is_null_or_empty(rhs[j]), \
                     f"Test-gold tokens mismatch: '{lhs[i].form}' != '{rhs[j].form}' at sent_id={lhs.sent_id}"
                 lhs_aligned.append(lhs[i])
                 rhs_aligned.append(rhs[j])

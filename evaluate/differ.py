@@ -57,7 +57,7 @@ def main(
                         print(gold_sentence.metadata['text'])
                         print('-------------------------------')
                         sentence_is_printed = True
-                    print(gold_token.form)
+                    print(f"{gold_token.id}\t{gold_token.form}")
                     print(f"\tdeps score no semantic = {test1_deps_score:.2f} < {test2_deps_score:.2f} = deps score with semantic")
                     max_deps_char_len = max(map(lambda x: len(str(x)), [test1_token.deps, test2_token.deps, gold_token.deps]))
                     max_semslot_char_len = max(map(lambda x: len(str(x)), [test1_token.semslot, test2_token.semslot, gold_token.semslot]))

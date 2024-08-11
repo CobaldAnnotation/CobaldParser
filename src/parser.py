@@ -193,12 +193,8 @@ class MorphoSyntaxSemanticParser(Model):
         ])
         # Nulls (do not average).
         null_metrics = self.null_classifier.get_metrics(reset)
-        null_accuracy = null_metrics["Accuracy"]
-        null_f1score = null_metrics["f1"]
 
         return {
-            'NullAccuracy': null_accuracy,
-            'NullF1': null_f1score,
             'Lemma': lemma_accuracy,
             'PosFeats': pos_feats_accuracy,
             'UD-UAS': uas_ud,
@@ -208,7 +204,8 @@ class MorphoSyntaxSemanticParser(Model):
             'Misc': misc_accuracy,
             'SS': semslot_accuracy,
             'SC': semclass_accuracy,
-            'Avg': mean_accuracy
+            'Avg': mean_accuracy,
+            **null_metrics
         }
 
     @override(check_signature=False)

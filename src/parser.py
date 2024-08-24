@@ -22,10 +22,7 @@ sys.path.append("..")
 from common.token import Token
 
 from .feedforward_classifier import FeedForwardClassifier
-from .lemma_classifier import LemmaClassifier
-from .lemmatize_helper import LemmaRule, predict_lemma_from_rule
 from .null_classifier import NullClassifier
-from .dependency_classifier import DependencyClassifier
 from .utils import get_null_mask
 
 
@@ -44,10 +41,10 @@ class MorphoSyntaxSemanticParser(Model):
         vocab: Vocabulary,
         indexer: TokenIndexer,
         embedder: TokenEmbedder,
-        lemma_rule_classifier: Lazy[LemmaClassifier],
-        pos_feats_classifier: Lazy[FeedForwardClassifier],
-        depencency_classifier: Lazy[DependencyClassifier],
-        misc_classifier: Lazy[FeedForwardClassifier],
+        lemma_rule_classifier,
+        pos_feats_classifier,
+        depencency_classifier,
+        misc_classifier,
         semslot_classifier: Lazy[FeedForwardClassifier],
         semclass_classifier: Lazy[FeedForwardClassifier],
         null_classifier: Lazy[NullClassifier]
@@ -57,23 +54,6 @@ class MorphoSyntaxSemanticParser(Model):
         self.embedder = embedder
         embedding_dim = self.embedder.get_output_dim()
 
-        self.lemma_rule_classifier = lemma_rule_classifier.construct(
-            in_dim=embedding_dim,
-            n_classes=vocab.get_vocab_size("lemma_rule_labels"),
-        )
-        self.pos_feats_classifier = pos_feats_classifier.construct(
-            in_dim=embedding_dim,
-            n_classes=vocab.get_vocab_size("pos_feats_labels"),
-        )
-        self.dependency_classifier = depencency_classifier.construct(
-            in_dim=embedding_dim,
-            n_rel_classes_ud=vocab.get_vocab_size("deprel_labels"),
-            n_rel_classes_eud=vocab.get_vocab_size("deps_labels"),
-        )
-        self.misc_classifier = misc_classifier.construct(
-            in_dim=embedding_dim,
-            n_classes=vocab.get_vocab_size("misc_labels"),
-        )
         self.semslot_classifier = semslot_classifier.construct(
             in_dim=embedding_dim,
             n_classes=vocab.get_vocab_size("semslot_labels"),
@@ -126,37 +106,18 @@ class MorphoSyntaxSemanticParser(Model):
         null_mask = get_null_mask(sentences_with_nulls)
         null_mask = move_to_device(null_mask, device)
 
-        # Mask nulls, since they have trivial lemmas.
-        lemma_rule = self.lemma_rule_classifier(embeddings, lemma_rule_labels, mask & (~null_mask), metadata)
-        # Don't mask nulls, as they actually have non-trivial grammatical features we want to learn.
-        pos_feats = self.pos_feats_classifier(embeddings, pos_feats_labels, mask)
-        # Mask nulls for basic UD and don't mask for E-UD.
-        syntax = self.dependency_classifier(embeddings, deprel_labels, deps_labels, mask & (~null_mask), mask, sentences_with_nulls)
-        misc = self.misc_classifier(embeddings, misc_labels, mask)
         semslot = self.semslot_classifier(embeddings, semslot_labels, mask)
         semclass = self.semclass_classifier(embeddings, semclass_labels, mask)
 
         self._maybe_log_preds_and_probs("Semantic slots:", semslot['probs'][0], "semslot_labels", sentences_with_nulls)
         self._maybe_log_preds_and_probs("Semantic classes:", semclass['probs'][0], "semclass_labels", sentences_with_nulls)
 
-        loss = lemma_rule['loss'] \
-            + pos_feats['loss'] \
-            + syntax['arc_loss_ud'] \
-            + syntax['rel_loss_ud'] \
-            + syntax['arc_loss_eud'] \
-            + syntax['rel_loss_eud'] \
-            + misc['loss'] \
-            + semslot['loss'] \
+        loss = semslot['loss'] \
             + semclass['loss'] \
             + null_loss
 
         return {
             'sentences': sentences_with_nulls,
-            'lemma_rule_preds': lemma_rule['preds'],
-            'pos_feats_preds': pos_feats['preds'],
-            'syntax_ud': syntax['syntax_ud'],
-            'syntax_eud': syntax['syntax_eud'],
-            'misc_preds': misc['preds'],
             'semslot_preds': semslot['preds'],
             'semclass_preds': semclass['preds'],
             'loss': loss,
@@ -165,29 +126,11 @@ class MorphoSyntaxSemanticParser(Model):
 
     @override
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        # Morphology.
-        lemma_accuracy = self.lemma_rule_classifier.get_metrics(reset)['Accuracy']
-        pos_feats_accuracy = self.pos_feats_classifier.get_metrics(reset)['Accuracy']
-        # Syntax.
-        syntax_metrics = self.dependency_classifier.get_metrics(reset)
-        uas_ud = syntax_metrics['UD-UAS']
-        las_ud = syntax_metrics['UD-LAS']
-        uas_eud = syntax_metrics['EUD-UAS']
-        las_eud = syntax_metrics['EUD-LAS']
-        # Misc
-        misc_accuracy = self.misc_classifier.get_metrics(reset)['Accuracy']
         # Semantic.
         semslot_accuracy = self.semslot_classifier.get_metrics(reset)['Accuracy']
         semclass_accuracy = self.semclass_classifier.get_metrics(reset)['Accuracy']
         # Average.
         mean_accuracy = np.mean([
-            lemma_accuracy,
-            pos_feats_accuracy,
-            uas_ud,
-            las_ud,
-            uas_eud,
-            las_eud,
-            misc_accuracy,
             semslot_accuracy,
             semclass_accuracy
         ])
@@ -195,13 +138,6 @@ class MorphoSyntaxSemanticParser(Model):
         null_metrics = self.null_classifier.get_metrics(reset)
 
         return {
-            'Lemma': lemma_accuracy,
-            'PosFeats': pos_feats_accuracy,
-            'UD-UAS': uas_ud,
-            'UD-LAS': las_ud,
-            'EUD-UAS': uas_eud,
-            'EUD-LAS': las_eud,
-            'Misc': misc_accuracy,
             'SS': semslot_accuracy,
             'SC': semclass_accuracy,
             'Avg': mean_accuracy,
@@ -214,6 +150,7 @@ class MorphoSyntaxSemanticParser(Model):
         # Make sure batch_size is 1 during prediction
         assert len(sentences) == 1
         sentence = sentences[0]
+        sentence_len = len(sentence)
 
         # Restore ids.
         ids = [token.id for token in sentence]
@@ -221,53 +158,21 @@ class MorphoSyntaxSemanticParser(Model):
         words = [token.form for token in sentence]
 
         # Decode lemmas.
-        lemmas = []
-        lemma_rule_strings = self._decode_predictions(output["lemma_rule_preds"][0], "lemma_rule_labels")
-        for word, lemma_rule_str in zip(words, lemma_rule_strings):
-            if lemma_rule_str == DEFAULT_OOV_TOKEN:
-                lemma = word
-            else:
-                lemma_rule = LemmaRule.from_str(lemma_rule_str)
-                lemma = predict_lemma_from_rule(word, lemma_rule)
-            lemmas.append(lemma)
+        lemmas = ['_' for _ in range(len(sentence))]
 
         # Decode pos and feats tags.
-        upos_tags = []
-        xpos_tags = []
-        feats_tags = []
-        pos_feats_preds = self._decode_predictions(output["pos_feats_preds"][0], "pos_feats_labels")
-        for pos_feats_glued in pos_feats_preds:
-            if pos_feats_glued == '_':
-                upos_tag, xpos_tag, feats_tag = '_', '_', '_'
-            else:
-                upos_tag, xpos_tag, feats_tag = pos_feats_glued.split('#')
-            upos_tags.append(upos_tag)
-            xpos_tags.append(xpos_tag)
-            feats_tags.append(feats_tag)
+        upos_tags = ['_' for _ in range(len(sentence))]
+        xpos_tags = ['_' for _ in range(len(sentence))]
+        feats_tags = ['_' for _ in range(len(sentence))]
 
         # Decode heads and deprels.
-        # Recall that syntactic nodes are renumerated so that [1, 1.1, 2] becomes [1, 2, 3].
-        # Now we want to bind them back to the actual tokens, i.e. renumerate [1, 2, 3] into [1, 1.1, 2].
-        # Luckily, we already have this mapping stored in 'ids'.
-        heads = [None for _ in range(len(sentence))]
-        deprels = [None for _ in range(len(sentence))]
-        for batch_index, edge_to, edge_from, deprel_id in output["syntax_ud"].tolist():
-            # Make sure UD-heads are unique (have no collisions).
-            assert heads[edge_to] is None
-            assert deprels[edge_to] is None
-            # Renumerate nodes back to actual tokens' ids and replace self-loops with ROOT (0).
-            heads[edge_to] = ids[edge_from] if edge_from != edge_to else 0
-            deprels[edge_to] = self.vocab.get_token_from_index(deprel_id, "deprel_labels")
+        heads = ['_' for _ in range(len(sentence))]
+        deprels = ['_' for _ in range(sentence_len)]
 
         # Decode deps.
         deps = [[] for _ in range(len(sentence))]
-        for batch_index, edge_to, edge_from, dep_id in output["syntax_eud"].tolist():
-            dep = self.vocab.get_token_from_index(dep_id, "deps_labels")
-            # Renumerate nodes back to actual tokens' ids and replace self-loops with ROOT (0).
-            deps[edge_to].append(f"{ids[edge_from] if edge_from != edge_to else 0}:{dep}")
-        deps = ['|'.join(dep) if dep else '_' for dep in deps]
 
-        miscs = self._decode_predictions(output["misc_preds"][0], "misc_labels")
+        miscs = ['_' for _ in range(len(sentence))]
         semslots = self._decode_predictions(output["semslot_preds"][0], "semslot_labels")
         semclasses = self._decode_predictions(output["semclass_preds"][0], "semclass_labels")
 

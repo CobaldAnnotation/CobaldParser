@@ -8,6 +8,7 @@ import numpy as np
 
 import torch
 from torch import Tensor, BoolTensor, LongTensor
+import torch.nn.functional as F
 
 from allennlp.nn.util import get_text_field_mask, move_to_device, get_device_of
 from allennlp.common import Lazy
@@ -20,6 +21,8 @@ from allennlp.data.token_indexers import TokenIndexer
 import sys
 sys.path.append("..")
 from common.token import Token
+
+import pickle
 
 from .feedforward_classifier import FeedForwardClassifier
 from .lemma_classifier import LemmaClassifier
@@ -50,7 +53,8 @@ class MorphoSyntaxSemanticParser(Model):
         misc_classifier: Lazy[FeedForwardClassifier],
         semslot_classifier: Lazy[FeedForwardClassifier],
         semclass_classifier: Lazy[FeedForwardClassifier],
-        null_classifier: Lazy[NullClassifier]
+        null_classifier: Lazy[NullClassifier],
+        semantic_table_path: str = "semantic_table.pkl"
     ):
         super().__init__(vocab)
 
@@ -87,6 +91,27 @@ class MorphoSyntaxSemanticParser(Model):
             embedder=embedder,
             in_dim=embedding_dim,
         )
+
+        # Read semantic table.
+        self.semantic_masks = None
+        if semantic_table_path is not None:
+            with open(semantic_table_path, 'rb') as f:
+                semantic_table = pickle.load(f)
+            # Add _.
+            semantic_table['_'] = {semslot for semslots in semantic_table.values() for semslot in semslots}
+            self.semantic_masks = dict()
+            for semclass in semantic_table:
+                possible_semslots = semantic_table[semclass]
+                possible_semslots.add('_')
+
+                semslot_to_index = self.vocab.get_token_to_index_vocabulary("semslot_labels")
+                mask = torch.zeros(len(semslot_to_index), dtype=torch.long)
+                for semslot in possible_semslots:
+                    if semslot in semslot_to_index:
+                        semslot_index = semslot_to_index[semslot]
+                        mask[semslot_index] = 1
+                self.semantic_masks[semclass] = mask
+            assert isinstance(self.semantic_masks, dict) and 1 <= len(self.semantic_masks)
 
     @override(check_signature=False)
     def forward(
@@ -136,6 +161,7 @@ class MorphoSyntaxSemanticParser(Model):
         semslot = self.semslot_classifier(embeddings, semslot_labels, mask)
         semclass = self.semclass_classifier(embeddings, semclass_labels, mask)
 
+
         self._maybe_log_preds_and_probs("Semantic slots:", semslot['probs'][0], "semslot_labels", sentences_with_nulls)
         self._maybe_log_preds_and_probs("Semantic classes:", semclass['probs'][0], "semclass_labels", sentences_with_nulls)
 
@@ -150,6 +176,10 @@ class MorphoSyntaxSemanticParser(Model):
             + semclass['loss'] \
             + null_loss
 
+        if self.semantic_masks is not None:
+            semslot['probs'] = self._restrict_semslots(semclass['preds'], semslot['probs'], syntax['syntax_eud'])
+            semslot['preds'] = semslot['probs'].argmax(-1)
+
         return {
             'sentences': sentences_with_nulls,
             'lemma_rule_preds': lemma_rule['preds'],
@@ -162,6 +192,22 @@ class MorphoSyntaxSemanticParser(Model):
             'loss': loss,
             'metadata': metadata,
         }
+
+    def _restrict_semslots(self, semclass_preds: Tensor, semslot_probs: Tensor, eud_syntax) -> Tensor:
+        """
+        For each SC's dependant (E-UD) check TODO
+        """
+        assert self.semantic_masks is not None
+        for batch_index, edge_to, edge_from, _ in eud_syntax:
+            semclass_id = semclass_preds[batch_index, edge_from].item()
+            semclass = self.vocab.get_token_from_index(semclass_id, "semclass_labels")
+            if semclass in self.semantic_masks:
+                semslot_mask = self.semantic_masks[semclass]
+                semslot_probs[batch_index, edge_to] *= semslot_mask
+
+        # Rescale probabilities.
+        semslot_probs = F.softmax(semslot_probs, dim=-1)
+        return semslot_probs
 
     @override
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:

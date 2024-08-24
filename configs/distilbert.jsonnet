@@ -76,7 +76,7 @@
             "hid_dim": 512,
             "activation": "relu",
             "dropout": 0.1,
-            "consecutive_null_limit": 4
+            "consecutive_null_limit": 2
         }
     },
     "trainer": {

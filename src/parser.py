@@ -171,12 +171,8 @@ class MorphoSyntaxSemanticParser(Model):
         ])
         # Nulls (do not average).
         null_metrics = self.null_classifier.get_metrics(reset)
-        null_accuracy = null_metrics["Accuracy"]
-        null_f1score = null_metrics["f1"]
 
         return {
-            'NullAccuracy': null_accuracy,
-            'NullF1': null_f1score,
             'Lemma': lemma_accuracy,
             'PosFeats': pos_feats_accuracy,
             'UD-UAS': uas_ud,
@@ -184,7 +180,8 @@ class MorphoSyntaxSemanticParser(Model):
             'EUD-UAS': uas_eud,
             'EUD-LAS': las_eud,
             'Misc': misc_accuracy,
-            'Avg': mean_accuracy
+            'Avg': mean_accuracy,
+            **null_metrics
         }
 
     @override(check_signature=False)
@@ -291,29 +288,5 @@ class MorphoSyntaxSemanticParser(Model):
 
             logger.info(f"sent_id = {sentence_metadata['sent_id']}")
             logger.info(f"text = {sentence_metadata['text']}")
-            logger.info(f"----------------------------------------------------------")
-
-    def _maybe_log_preds_and_probs(self, message: str, probs: Tensor, namespace: str, sentences: List[Token]):
-        """
-        Log predictions and their probabilities for each token.
-        """
-        if len(sentences) == 1:
-            # Only do log when batch size is 1.
-            sentence = sentences[0]
-
-            # [seq_len, n_classes]
-            assert len(probs.shape) == 2
-            assert len(probs) == len(sentence)
-            # [seq_len]
-            pred_probs, pred_ids = torch.max(probs, dim=-1)
-            pred_labels = self._decode_predictions(pred_ids, namespace)
-
-            max_token_char_len = max(len(token.form) for token in sentence)
-            max_label_char_len = max(len(label) for label in pred_labels)
-
-            logger.info(message)
-            logger.info(f"ID\t{'Form':{max_token_char_len}} {'Prediction':{max_label_char_len}} Probability")
-            for token, pred_label, pred_prob in zip(sentence, pred_labels, pred_probs):
-                logger.info(f"{token.id}\t{token.form:{max_token_char_len}} {pred_label:{max_label_char_len}} {pred_prob:.2f}")
             logger.info(f"----------------------------------------------------------")
 

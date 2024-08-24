@@ -75,7 +75,8 @@
         "null_classifier": {
             "hid_dim": 512,
             "activation": "relu",
-            "dropout": 0.1
+            "dropout": 0.1,
+            "consecutive_null_limit": 4
         }
     },
     "trainer": {

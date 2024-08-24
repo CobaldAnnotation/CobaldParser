@@ -1,8 +1,10 @@
 from typing import List, Dict
 
+import numpy as np
+
 import torch
 from torch import nn
-from torch import Tensor, BoolTensor
+from torch import Tensor, LongTensor
 
 from allennlp.modules.token_embedders.token_embedder import TokenEmbedder
 from allennlp.data.token_indexers import TokenIndexer
@@ -12,7 +14,7 @@ from allennlp.data.tokenizers import Token as AllenToken
 from allennlp.data import TextFieldTensors
 from allennlp.nn.util import get_text_field_mask, move_to_device, get_device_of, get_lengths_from_binary_sequence_mask
 from allennlp.models import Model
-from allennlp.training.metrics import CategoricalAccuracy, F1Measure
+from allennlp.training.metrics import CategoricalAccuracy, FBetaMeasure
 
 import sys
 sys.path.append("..")
@@ -36,23 +38,24 @@ class NullClassifier(FeedForwardClassifier):
         hid_dim: int,
         activation: str,
         dropout: float,
-        positive_class_weight: float = 1.0
+        consecutive_null_limit: int,
+        class_weights: List[float] = None
     ):
         super().__init__(
             vocab=vocab,
             in_dim=in_dim,
             hid_dim=hid_dim,
-            n_classes=2,
+            n_classes=consecutive_null_limit + 1,
             activation=activation,
             dropout=dropout
         )
         self.indexer = indexer
         self.embedder = embedder
 
-        weight = torch.Tensor([1.0, positive_class_weight])
-        self.criterion = nn.CrossEntropyLoss(weight=weight)
+        class_weights = Tensor(class_weights) if class_weights is not None else None
+        self.criterion = nn.CrossEntropyLoss(weight=class_weights)
         self.accuracy = CategoricalAccuracy()
-        self.fscore = F1Measure(positive_label=1)
+        self.fscore = FBetaMeasure()
 
     def forward(
         self,
@@ -69,13 +72,13 @@ class NullClassifier(FeedForwardClassifier):
         sentences_with_cls_and_nulls = self._add_cls_token(sentences_with_nulls)
         sentences_with_cls_and_no_nulls = self._remove_nulls(sentences_with_cls_and_nulls)
 
-        target_has_null_after = self._build_has_null_after(sentences_with_cls_and_nulls).long()
-        target_has_null_after = move_to_device(target_has_null_after, device)
+        target_null_counts = self._build_null_count_labels(sentences_with_cls_and_nulls)
+        target_null_counts = move_to_device(target_null_counts, device)
 
         words_with_cls_and_no_nulls = self._create_words(sentences_with_cls_and_no_nulls, device)
         mask_no_nulls = get_text_field_mask(words_with_cls_and_no_nulls)
         embeddings_with_cls_and_no_nulls = self.embedder(**words_with_cls_and_no_nulls['tokens'])
-        nulls = super().forward(embeddings_with_cls_and_no_nulls, target_has_null_after, mask_no_nulls)
+        nulls = super().forward(embeddings_with_cls_and_no_nulls, target_null_counts, mask_no_nulls)
         loss = nulls["loss"]
 
         if is_inference:
@@ -85,12 +88,11 @@ class NullClassifier(FeedForwardClassifier):
 
         return words_with_nulls, sentences_with_nulls, loss
 
-    def _create_words(self, sentences: List[List[Token]], device):
+    def _create_words(self, sentences: List[List[Token]], device) -> Dict[str, Tensor]:
         text_fields = []
         max_padding_lengths = {}
-        
+
         for sentence in sentences:
-            #print(f"sentence: {sentence}")
             tokens = [AllenToken(token.form) for token in sentence]
             text_field = TextField(tokens, {"tokens": self.indexer})
             text_field.index(self.vocab)
@@ -99,7 +101,7 @@ class NullClassifier(FeedForwardClassifier):
             for name, length in text_field.get_padding_lengths().items():
                 max_padding_lengths[name] = max(max_padding_lengths[name], length)
             text_fields.append(text_field)
-        
+
         tensors = []
         for text_field in text_fields:
             tensor = text_field.as_tensor(max_padding_lengths)
@@ -109,23 +111,35 @@ class NullClassifier(FeedForwardClassifier):
         return words
 
     @staticmethod
-    def _build_has_null_after(sentences: List[List[Token]]) -> BoolTensor:
+    def _build_null_count_labels(sentences: List[List[Token]]) -> LongTensor:
         """
-        Return mask without nulls, where mask[:, i] = True iff token i has null after him in original sentence (with nulls).
+        Count the number of nulls following each token for a bunch of sentences.
+        output[i, j] = N mean j-th token in i-th sentence in followed by N nulls
+
+        Example:
+        >>> sentences = [
+        ...     ['Iraq', 'are', 'reported', 'dead', 'and', '500', '#NULL', '#NULL', '#NULL', 'wounded']
+        ... ]
+        >>> _build_null_count_labels(sentences)
+        [0, 0, 0, 0, 0, 0, 3, 0]
         """
+        sentences_null_counts: List[LongTensor] = []
+        for sentence in sentences:
+            sentence_null_counts = []
+            cumulative_null_counter = 0
+            for token in sentence:
+                if token.is_null():
+                    cumulative_null_counter += 1
+                else:
+                    if 1 <= cumulative_null_counter:
+                        assert 1 <= len(sentence_null_counts) and sentence_null_counts[-1] == 0
+                        sentence_null_counts[-1] = cumulative_null_counter
+                        cumulative_null_counter = 0
+                    sentence_null_counts.append(0)
+            sentences_null_counts.append(LongTensor(sentence_null_counts))
 
-        nulls = torch.nn.utils.rnn.pad_sequence(
-            [torch.LongTensor([token.is_null() for token in sentence]) for sentence in sentences],
-            batch_first=True,
-            padding_value=-1
-        )
-        null_mask = (nulls == 1)
-        no_null_mask = (nulls == 0)
-
-        has_null_after = null_mask.roll(shifts=-1, dims=-1)
-        sentences_without_nulls_lengths = get_lengths_from_binary_sequence_mask(no_null_mask).tolist()
-        has_null_after_trimmed = torch.masked_select(has_null_after, no_null_mask).split(sentences_without_nulls_lengths)
-        return torch.nn.utils.rnn.pad_sequence(has_null_after_trimmed, batch_first=True, padding_value=False)
+        null_count_labels = torch.nn.utils.rnn.pad_sequence(sentences_null_counts, batch_first=True, padding_value=-1)
+        return null_count_labels.long()
 
     @staticmethod
     def _remove_nulls(sentences: List[List[Token]]):
@@ -142,14 +156,14 @@ class NullClassifier(FeedForwardClassifier):
         return [sentence[1:] for sentence in sentences]
 
     @staticmethod
-    def _add_nulls(sentences: List[List[Token]], nulls):
+    def _add_nulls(sentences: List[List[Token]], sentences_null_counts: LongTensor):
         sentences_with_nulls = []
-        for sentence, nulls_sentence in zip(sentences, nulls):
+        for sentence, sentence_null_counts in zip(sentences, sentences_null_counts):
             sentence_with_nulls = []
-            for token, should_insert_null in zip(sentence, nulls_sentence):
+            for token, n_nulls_to_insert in zip(sentence, sentence_null_counts):
                 sentence_with_nulls.append(token)
-                if should_insert_null:
-                    sentence_with_nulls.append(Token.create_null(id=f"{token.id}.1"))
+                for i in range(1, n_nulls_to_insert + 1):
+                    sentence_with_nulls.append(Token.create_null(id=f"{token.id}.{i}"))
             sentences_with_nulls.append(sentence_with_nulls)
         return sentences_with_nulls
 
@@ -158,9 +172,16 @@ class NullClassifier(FeedForwardClassifier):
         self.fscore(logits, labels, mask)
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        f1measure = self.fscore.get_metric(reset)
-        return {
-            "Accuracy": self.accuracy.get_metric(reset),
-            "f1": f1measure["f1"]
-        }
+        f1_stat = self.fscore.get_metric(reset)
+        metrics = {"NullAccuracy": self.accuracy.get_metric(reset)}
+
+        # Track f1score for each class.
+        nonzero_f1 = []
+        for i, score in enumerate(f1_stat["fscore"]):
+            metrics[f"NullF1/Class={i}"] = score
+            if 0.0 < score:
+                nonzero_f1.append(score)
+        metrics["NullF1/Total"] = np.mean(nonzero_f1)
+
+        return metrics
 

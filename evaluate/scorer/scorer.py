@@ -52,26 +52,12 @@ class CobaldScorer:
         if len(test.feats) == 0 or len(gold.feats) == 0:
             return len(test.feats) == len(gold.feats)
 
-        correct_feats_weighted_sum = np.sum([
-            (self.feats_weights[gram_cat] if self.feats_weights is not None else 1)
-            * (gold.feats[gram_cat] == test.feats[gram_cat])
-            for gram_cat in gold.feats
-            if gram_cat in test.feats
-        ])
-        gold_feats_weighted_sum = np.sum([
-            (self.feats_weights[gram_cat] if self.feats_weights is not None else 1)
-            for gram_cat in gold.feats
-        ])
-        assert correct_feats_weighted_sum <= gold_feats_weighted_sum
+        test_feats = set(test.feats.items())
+        gold_feats = set(gold.feats.items())
 
-        # Penalize test if it is longer than gold.
-        # If there were no such penalty, one could simply predict all grammatical categories
-        # existing for each token and score would not get any worse.
-        # It's not what we expect from a good morphology classifier, so use penalty.
-        penalty = 1 / (1 + max(len(test.feats) - len(gold.feats), 0))
+        sum_weights = lambda feats: sum(self.feats_weights[cat] for cat, gram in feats)
+        score = sum_weights(test_feats & gold_feats) / sum_weights(test_feats | gold_feats)
 
-        assert gold_feats_weighted_sum != 0
-        score = penalty * correct_feats_weighted_sum / gold_feats_weighted_sum
         assert 0. <= score <= 1.
         return score
 

@@ -1,37 +1,39 @@
 from overrides import override
-from typing import Dict, List
 
 import torch
 from torch import nn
-from torch import Tensor
+from torch import Tensor, BoolTensor, LongTensor
+
 import torch.nn.functional as F
 
 from allennlp.data.vocabulary import Vocabulary
-from allennlp.models import Model
-from allennlp.nn.activations import Activation
 from allennlp.training.metrics import CategoricalAccuracy
 
 
-@Model.register('feed_forward_classifier')
-class FeedForwardClassifier(Model):
+ACT2FN = {
+    "relu": nn.ReLU(),
+    "leaky_relu": nn.LeakyReLU,
+    "sigmoid": nn.Sigmoid(),
+    "tanh": nn.Tanh()
+}
+
+
+class MLP(nn.Model):
     """
-    A simple classifier composed of two feed-forward layers separated by a nonlinear activation.
+    Multilayer perceptron.
     """
     def __init__(
         self,
-        vocab: Vocabulary,
         in_dim: int,
         hid_dim: int,
         n_classes: int,
         activation: str,
         dropout: float
     ):
-        super().__init__(vocab)
-
         self.classifier = nn.Sequential(
             nn.Dropout(dropout),
             nn.Linear(in_dim, hid_dim),
-            Activation.by_name(activation)(),
+            ACT2FN[activation],
             nn.Dropout(dropout),
             nn.Linear(hid_dim, n_classes)
         )
@@ -42,9 +44,9 @@ class FeedForwardClassifier(Model):
     def forward(
         self,
         embeddings: Tensor,
-        labels: Tensor = None,
-        mask: Tensor = None
-    ) -> Dict[str, Tensor]:
+        labels: LongTensor = None,
+        mask: BoolTensor = None
+    ) -> dict[str, Tensor]:
 
         logits = self.classifier(embeddings)
         probs = F.softmax(logits, dim=-1)
@@ -57,14 +59,12 @@ class FeedForwardClassifier(Model):
 
         return {'preds': preds, 'probs': probs, 'loss': loss}
 
-    def loss(self, logits: Tensor, labels: Tensor, mask: Tensor) -> Tensor:
+    def loss(self, logits: Tensor, labels: LongTensor, mask: BoolTensor) -> Tensor:
         return self.criterion(logits[mask], labels[mask])
 
-    def update_metrics(self, logits: Tensor, labels: Tensor, mask: Tensor):
+    def update_metrics(self, logits: Tensor, labels: LongTensor, mask: BoolTensor):
         self.accuracy(logits, labels, mask)
 
-    @override
-    def get_metrics(self, reset: bool = False) -> Dict[str, float]:
+    def get_metrics(self, reset: bool = False) -> dict[str, float]:
         return {"Accuracy": self.accuracy.get_metric(reset)}
-
 

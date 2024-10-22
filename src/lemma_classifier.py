@@ -1,24 +1,22 @@
 from overrides import override
-from typing import Dict, List
+from typing import dict, list
 
 import re
 import string
 
 import torch
 from torch import nn
-from torch import Tensor
+from torch import Tensor, BoolTensor, LongTensor
 
 from allennlp.data.vocabulary import Vocabulary, DEFAULT_OOV_TOKEN
-from allennlp.models import Model
 
-from .feedforward_classifier import FeedForwardClassifier
+from .mlp import MLP
 from .lemmatize_helper import LemmaRule, predict_lemma_from_rule, normalize, DEFAULT_LEMMA_RULE
 
 
-@Model.register('lemma_classifier')
-class LemmaClassifier(FeedForwardClassifier):
+class LemmaClassifier(MLP):
     """
-    FeedForwardClassifier specialization for lemma classification.
+    MLP for lemma classification.
     """
 
     PUNCTUATION = set(string.punctuation)
@@ -31,10 +29,12 @@ class LemmaClassifier(FeedForwardClassifier):
         n_classes: int,
         activation: str,
         dropout: float,
-        dictionaries: List[Dict[str, str]] = [],
+        dictionaries: list[dict[str, str]] = [],
         topk: int = None
     ):
-        super().__init__(vocab, in_dim, hid_dim, n_classes, activation, dropout)
+        super().__init__(in_dim, hid_dim, n_classes, activation, dropout)
+
+        self.vocab = vocab
 
         self.dictionary = set()
         for dictionary_info in dictionaries:
@@ -57,10 +57,10 @@ class LemmaClassifier(FeedForwardClassifier):
     def forward(
         self,
         embeddings: Tensor,
-        labels: Tensor = None,
-        mask: Tensor = None,
-        metadata: Dict = None
-    ) -> Dict[str, Tensor]:
+        labels: LongTensor = None,
+        mask: BoolTensor = None,
+        metadata: dict = None
+    ) -> dict[str, Tensor]:
 
         output = super().forward(embeddings, labels, mask)
         preds, probs, loss = output['preds'], output['probs'], output['loss']

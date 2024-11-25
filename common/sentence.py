@@ -1,11 +1,10 @@
 from conllu.models import TokenList
-from typing import List, Optional, Dict
 
 from .token import Token
 
 
 class Sentence:
-    def __init__(self, tokens: List[Token], metadata: Dict, renumerate: bool = True, prohibit_range_tokens: bool = True):
+    def __init__(self, tokens: list[Token], metadata: dict, renumerate: bool = True, prohibit_range_tokens: bool = True):
         self._tokens = tokens
         self._metadata = metadata
         if prohibit_range_tokens:
@@ -31,59 +30,59 @@ class Sentence:
         return len(self._tokens)
 
     @property
-    def tokens(self) -> List[Token]:
+    def tokens(self) -> list[Token]:
         return self._tokens
 
     @property
-    def ids(self) -> List[int]:
+    def ids(self) -> list[int]:
         return self._collect_nullable_field("ids")
 
     @property
-    def words(self) -> List[str]:
+    def words(self) -> list[str]:
         return [token.form for token in self._tokens]
 
     @property
-    def lemmas(self) -> Optional[List[str]]:
+    def lemmas(self) -> list[str] | None:
         return self._collect_nullable_field("lemma")
 
     @property
-    def upos_tags(self) -> Optional[List[str]]:
+    def upos(self) -> list[str] | None:
         return self._collect_nullable_field("upos")
 
     @property
-    def xpos_tags(self) -> Optional[List[str]]:
+    def xpos(self) -> list[str] | None:
         return self._collect_nullable_field("xpos")
 
     @property
-    def feats(self) -> Optional[List[str]]:
+    def feats(self) -> list[str] | None:
         return self._collect_nullable_field("feats")
 
     @property
-    def heads(self) -> Optional[List[int]]:
+    def heads(self) -> list[int] | None:
         return self._collect_nullable_field("head")
 
     @property
-    def deprels(self) -> Optional[List[str]]:
+    def deprels(self) -> list[str] | None:
         return self._collect_nullable_field("deprel")
 
     @property
-    def deps(self) -> Optional[List[Dict]]:
+    def deps(self) -> list[dict] | None:
         return self._collect_nullable_field("deps")
 
     @property
-    def miscs(self) -> Optional[List[str]]:
+    def miscs(self) -> list[str] | None:
         return self._collect_nullable_field("misc")
 
     @property
-    def semslots(self) -> Optional[List[str]]:
-        return self._collect_nullable_field("semslot")
+    def deepslots(self) -> list[str] | None:
+        return self._collect_nullable_field("deepslot")
 
     @property
-    def semclasses(self) -> Optional[List[str]]:
+    def semclasses(self) -> list[str] | None:
         return self._collect_nullable_field("semclass")
 
     @property
-    def metadata(self) -> Dict:
+    def metadata(self) -> dict:
         return self._metadata
 
     @property
@@ -104,7 +103,7 @@ class Sentence:
         lines += [token.serialize() for token in self._tokens]
         return '\n'.join(lines) + "\n\n"
 
-    def _collect_nullable_field(self, field_type: str) -> Optional[List]:
+    def _collect_nullable_field(self, field_type: str) -> list | None:
         field_values = [getattr(token, field_type) for token in self._tokens]
 
         # If all fields are None, return None (=no reference labels).
@@ -113,13 +112,13 @@ class Sentence:
         return field_values
 
     @staticmethod
-    def _renumerate_tokens(tokens: List[Token]):
+    def _renumerate_tokens(tokens: list[Token]):
         """
         Renumerate tokens, so that #NULLs get integer id (e.g. [1, 1.1, 2] turns into [1, 2, 3]).
         This also renumerates 'head' and 'deps' tags accordingly.
         Inplace function.
         """
-        old2new_id: Dict[str, int] = {'-1': -1, '0': 0} # -1 accounts for _ head and 0 accounts for ROOT head.
+        old2new_id: dict[str, int] = {'-1': -1, '0': 0} # -1 accounts for _ head and 0 accounts for ROOT head.
 
         # Change ids.
         for i, token in enumerate(tokens, 1):

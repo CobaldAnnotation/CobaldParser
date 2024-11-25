@@ -9,9 +9,8 @@ rm -rf CobaldEng
 ./preprocessing.py target_dataset.conllu target_dataset_processed.conllu
 ./filter_invalid_conllu.py target_dataset_processed.conllu target_dataset_filtered.conllu
 
-# FIXME: uncomment when standalone test dataset is provided
-# ./train_val_split.py target_dataset_filtered.conllu train.conllu validation.conllu 0.8
-./train_val_split.py target_dataset_filtered.conllu train.conllu validation_test.conllu 0.7
-./train_val_split.py validation_test.conllu test.conllu validation.conllu 0.5
+./train_val_split.py target_dataset_filtered.conllu train.conllu validation.conllu 0.8
+#./train_val_split.py target_dataset_filtered.conllu train.conllu validation_test.conllu 0.7
+#./train_val_split.py validation_test.conllu test.conllu validation.conllu 0.5
 # Cleanup
 rm target_dataset_processed.conllu target_dataset_filtered.conllu validation_test.conllu

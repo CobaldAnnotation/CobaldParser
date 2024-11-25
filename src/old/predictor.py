@@ -8,7 +8,6 @@ from allennlp.data import Instance
 import sys
 sys.path.append("..")
 from common.token import Token
-from common.sentence import Sentence
 
 
 @Predictor.register("morpho_syntax_semantic_predictor")

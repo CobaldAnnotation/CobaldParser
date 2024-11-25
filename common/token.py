@@ -16,7 +16,7 @@ class Token:
         deprel: str = None,
         deps: Dict[str, str] = None,
         misc: str = None,
-        semslot: str = None,
+        deepslot: str = None,
         semclass: str = None,
     ):
         self.id = str(id)
@@ -29,7 +29,7 @@ class Token:
         self.deprel = deprel
         self.deps = deps
         self.misc = misc
-        self.semslot = semslot
+        self.deepslot = deepslot
         self.semclass = semclass
 
     def serialize(self) -> str:
@@ -73,7 +73,7 @@ class Token:
             f"{serialize_field(self.deprel)}\t"
             f"{deps_str}\t"
             f"{serialize_field(self.misc)}\t"
-            f"{serialize_field(self.semslot)}\t"
+            f"{serialize_field(self.deepslot)}\t"
             f"{serialize_field(self.semclass)}"
         )
 

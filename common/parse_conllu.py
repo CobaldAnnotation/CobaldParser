@@ -1,6 +1,5 @@
 import conllu
 
-from copy import deepcopy
 from typing import Iterable, TextIO, List, Optional, Dict
 
 from .sentence import Sentence
@@ -17,7 +16,7 @@ FIELDS = [
     "deprel",
     "deps",
     "misc",
-    "semslot",
+    "deepslot",
     "semclass"
 ]
 

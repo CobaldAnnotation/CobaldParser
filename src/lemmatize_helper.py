@@ -37,11 +37,11 @@ def normalize(word: str) -> str:
     return word.lower().replace('ё', 'е')
 
 
-def predict_lemma_rule(word: str, lemma: str) -> LemmaRule:
+def construct_lemma_rule(word: str, lemma: str) -> str:
     """
     Predict lemmatization rule given word and its lemma.
     Example:
-    >>> predict_lemma_rule("сек.", "секунда")
+    >>> build_lemma_rule("сек.", "секунда")
     LemmaRule(cut_prefix=0, cut_suffix=1, append_suffix='унда')
     """
     word = normalize(word)
@@ -49,13 +49,15 @@ def predict_lemma_rule(word: str, lemma: str) -> LemmaRule:
 
     match = SequenceMatcher(None, word, lemma).find_longest_match(0, len(word), 0, len(lemma))
 
-    return LemmaRule(
+    lemma_rule = LemmaRule(
         cut_prefix = match.a,
         cut_suffix = len(word) - (match.a + match.size),
         append_suffix = lemma[match.b + match.size:]
     )
+    return str(lemma_rule)
 
-def predict_lemma_from_rule(word: str, rule: LemmaRule) -> str:
+def reconstruct_lemma(word: str, rule_str: str) -> str:
+    rule = LemmaRule.from_str(rule_str)
     lemma = word[rule.cut_prefix:]
     lemma = lemma[:-rule.cut_suffix] if rule.cut_suffix != 0 else lemma
     lemma += rule.append_suffix

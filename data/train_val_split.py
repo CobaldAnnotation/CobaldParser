@@ -15,7 +15,7 @@ from common.sentence import Sentence
 def extract_sentence_tagset(sentence: Sentence, tag_name: str):
     sentence_tagset = set()
     for token in sentence:
-        if tag_name in ["lemma_rule", "upos_feats", "semslot", "semclass", "deprel"]:
+        if tag_name in ["lemma_rule", "joint_pos_feats", "semslot", "semclass", "deprel"]:
             token_tagset = {getattr(token, tag_name)}
         elif tag_name in ["deps"]:
             syntax_tagset = getattr(token, tag_name)
@@ -163,9 +163,9 @@ if __name__ == "__main__":
     for sentence in sentences:
         for token in sentence:
             token.lemma_rule = predict_lemma_rule(token.form, token.lemma) if token.form else ""
-            token.upos_feats = token.upos + "&" + str(token.feats)
+            token.joint_pos_feats = f"{token.upos}#{token.xpos}#{str(token.feats)}"
 
-    tagsets_names = ["lemma_rule", "upos_feats", "semslot", "semclass", "deprel", "deps"]
+    tagsets_names = ["lemma_rule", "joint_pos_feats", "semslot", "semclass", "deprel", "deps"]
 
     print("Splitting...")
     train_sentences, val_sentences = train_val_split(sentences, args.train_fraction, tagsets_names)

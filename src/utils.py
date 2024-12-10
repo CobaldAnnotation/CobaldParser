@@ -55,9 +55,10 @@ def dict_from_str(s: str) -> dict:
 
 
 def pad_matrices(matrices: list[tensor], padding_value: int = 0) -> tensor:
-    """Pad square matrices so that each matrix is padded to the right and bottom."""
-    """Basically a torch.nn.utils.rnn.pad_sequence for matrices."""
-
+    """
+    Pad square matrices so that each matrix is padded to the right and bottom.
+    Basically a torch.nn.utils.rnn.pad_sequence for matrices.
+    """
     # Determine the maximum size in each dimension
     max_height = max(t.size(0) for t in matrices)
     max_width = max(t.size(1) for t in matrices)
@@ -96,4 +97,54 @@ def pairwise_mask(masks1d: tensor) -> tensor:
 def replace_masked_values(tensor: tensor, mask: tensor, replace_with: float):
     assert tensor.dim() == mask.dim(), "tensor.dim() of {tensor.dim()} != mask.dim() of {mask.dim()}"
     tensor.masked_fill_(~mask, replace_with)
+
+
+def align_two_sentences(lhs: list[str], rhs: list[str]) -> tuple:
+    """
+    Aligns two sequences of tokens. Empty token is inserted where needed.
+    Example:
+    >>> true_tokens = ["How", "did", "this", "#NULL", "happen"]
+    >>> pred_tokens = ["How", "#NULL", "did", "this", "happen"]
+    >>> align_labels(true_tokens, pred_tokens)
+    ['How', '#EMPTY', 'did', 'this',  '#NULL', 'happen'],
+    ['How',  '#NULL', 'did', 'this', '#EMPTY', 'happen']
+    """
+    lhs_aligned, rhs_aligned = [], []
+
+    i, j = 0, 0
+    while i < len(lhs) and j < len(rhs):
+        if lhs[i] == "#NULL" and rhs[j] != "#NULL":
+            lhs_aligned.append(lhs[i])
+            rhs_aligned.append("#EMPTY")
+            i += 1
+        elif lhs[i] != "#NULL" and rhs[j] == "#NULL":
+            lhs_aligned.append("#EMPTY")
+            rhs_aligned.append(rhs[j])
+            j += 1
+        else:
+            assert lhs[i] == rhs[j]
+            lhs_aligned.append(lhs[i])
+            rhs_aligned.append(rhs[j])
+            i += 1
+            j += 1
+
+    if i < len(lhs):
+        # lhs has extra #NULLs at the end, so append #EMPTY node to rhs
+        assert j == len(rhs)
+        while i < len(lhs):
+            lhs_aligned.append(lhs[i])
+            rhs_aligned.append("#NULL")
+            i += 1
+    if j < len(rhs):
+        assert i == len(lhs)
+        while j < len(rhs):
+            lhs_aligned.append("#NULL")
+            rhs_aligned.append(rhs[j])
+            j += 1
+
+    assert len(lhs_aligned) == len(rhs_aligned)
+    return lhs_aligned, rhs_aligned
+
+def align_sentences(lhs: list[list[str]], rhs: list[list[str]]) -> tuple:
+    return zip(*[align_two_sentences(l, r) for l, r in zip(lhs, rhs)])
 

@@ -1,24 +1,19 @@
 # Based on https://pytorch.org/tutorials/beginner/introyt/trainingyt.html
 
-# For PyTorch TensorBoard logging
-from datetime import datetime
-
-import numpy as np
+from tqdm import tqdm
+import numpy
 
 import torch
 from torch import Tensor
 from torch import nn
 from torch.utils.data import DataLoader
 from torch.optim import Optimizer
-from torch.utils.tensorboard import SummaryWriter
 
 from metrics import F1Measure, MultilabelAttachmentScore
-from utils import build_padding_mask, build_null_mask, pairwise_mask
-
-from tqdm import tqdm
+from utils import build_padding_mask, build_null_mask, pairwise_mask, align_sentences
 
 
-def evaluate(model: nn.Module, val_dataloader: DataLoader, device) -> float:
+def evaluate(model: nn.Module, val_dataloader: DataLoader, device) -> dict[str, float]:
     model.eval()
 
     lemma_scorer = F1Measure(average='macro')
@@ -27,30 +22,41 @@ def evaluate(model: nn.Module, val_dataloader: DataLoader, device) -> float:
     eud_syntax_scorer = MultilabelAttachmentScore()
     deepslot_scorer = F1Measure(average='macro')
     semclass_scorer = F1Measure(average='macro')
-    # Nulls are binary, so micro average equals to a simple binary F1.
-    null_scorer = F1Measure(average='micro')
+    null_scorer = F1Measure(average='macro')
 
     sum_loss = 0.
     # Disable gradient computation.
     with torch.no_grad():
-        for batch in tqdm(val_dataloader, desc="Validation"):
+        for batch in tqdm(val_dataloader, desc="Evaluate"):
             for key, value in batch.items():
-                batch[key] = value.to(device) if isinstance(value, Tensor) else value
-            outputs = model(**batch)
-            sum_loss += outputs["loss"].item()
+                batch[key] = value.to(device) if isinstance(value, torch.Tensor) else value
+            output = model(**batch)
+            sum_loss += output["loss"].item()
 
             # Build masks.
             padding_mask = build_padding_mask(batch["words"], device)
-            padding_mask2d = pairwise_mask(padding_mask)
             null_mask = build_null_mask(batch["words"], device)
             # Update cumulative scores.
-            lemma_scorer.add(outputs["lemma_rules"], batch["lemma_rules"], padding_mask)
-            joint_pos_feats_scorer.add(outputs["joint_pos_feats"], batch["joint_pos_feats"], padding_mask)
-            ud_syntax_scorer.add(outputs["deps_ud"], batch["deps_ud"], padding_mask2d)
-            eud_syntax_scorer.add(outputs["deps_eud"], batch["deps_eud"], padding_mask2d)
-            deepslot_scorer.add(outputs["deepslots"], batch["deepslots"], padding_mask)
-            semclass_scorer.add(outputs["semclasses"], batch["semclasses"], padding_mask)
-            # TODO: score nulls
+            lemma_scorer.add(output["lemma_rules"], batch["lemma_rules"], padding_mask)
+            joint_pos_feats_scorer.add(output["joint_pos_feats"], batch["joint_pos_feats"], padding_mask)
+            ud_syntax_scorer.add(
+                output["deps_ud"],
+                batch["deps_ud"],
+                mask=pairwise_mask(padding_mask & ~null_mask)
+            )
+            eud_syntax_scorer.add(
+                output["deps_eud"],
+                batch["deps_eud"],
+                mask=pairwise_mask(padding_mask)
+            )
+            deepslot_scorer.add(output["deepslots"], batch["deepslots"], padding_mask)
+            semclass_scorer.add(output["semclasses"], batch["semclasses"], padding_mask)
+            # Score nulls.
+            pred_words_aligned, gold_words_aligned = align_sentences(output["words"], batch["words"])
+            pred_nulls_mask = build_null_mask(pred_words_aligned, device)
+            gold_nulls_mask = build_null_mask(gold_words_aligned, device)
+            padding_mask_aligned = build_padding_mask(gold_words_aligned, device)
+            null_scorer.add(pred_nulls_mask, gold_nulls_mask, padding_mask_aligned)
 
     average_loss = sum_loss / len(val_dataloader)
     # Get the averaged scores.
@@ -62,8 +68,16 @@ def evaluate(model: nn.Module, val_dataloader: DataLoader, device) -> float:
     euas, elas = eud_syntax["UAS"], eud_syntax["LAS"]
     deepslot_f1 = deepslot_scorer.get_average()["f1"]
     semclass_f1 = semclass_scorer.get_average()["f1"]
+    null_f1 = null_scorer.get_average()["f1"]
     # Average averaged scores.
-    average_score = np.mean([lemma_f1, joint_pos_feats_f1, uas, las, euas, elas, deepslot_f1, semclass_f1])
+    average_score = numpy.mean([
+        lemma_f1,
+        joint_pos_feats_f1,
+        uas, las, euas, elas,
+        deepslot_f1,
+        semclass_f1,
+        null_f1
+    ])
 
     return {
         "Lemma F1": lemma_f1,
@@ -74,6 +88,7 @@ def evaluate(model: nn.Module, val_dataloader: DataLoader, device) -> float:
         "ELAS": elas,
         "Deepslot F1": deepslot_f1,
         "Semclass F1": semclass_f1,
+        "Null F1": null_f1,
         "Average score": average_score,
         "Loss": average_loss
     }
@@ -84,7 +99,6 @@ def train_one_epoch(
     train_dataloader: DataLoader,
     optimizer: Optimizer,
     epoch_index: int,
-    tb_writer,
     device
 ) -> float:
     # Make sure gradient tracking is on and perform training loop.
@@ -96,8 +110,8 @@ def train_one_epoch(
         optimizer.zero_grad()
         for key, value in batch.items():
             batch[key] = value.to(device) if isinstance(value, Tensor) else value
-        outputs = model(**batch)
-        loss = outputs["loss"]
+        output = model(**batch)
+        loss = output["loss"]
         loss.backward()
         optimizer.step()
         sum_loss += loss.item()
@@ -106,24 +120,22 @@ def train_one_epoch(
     return average_loss
 
 
-def train(
+def train_multiple_epochs(
     model: nn.Module,
     train_dataloader: DataLoader,
     val_dataloader: DataLoader,
     optimizer: Optimizer,
     n_epochs: int,
     device
-):
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    writer = SummaryWriter(f'runs/{timestamp}')
+) -> nn.Module:
+    model.to(device)
 
     best_val_loss = float('inf')
-
-    model = model.to(device)
+    best_model = model
     for epoch_index in range(n_epochs):
         epoch_number = epoch_index + 1
 
-        train_loss = train_one_epoch(model, train_dataloader, optimizer, epoch_index, writer, device)
+        train_loss = train_one_epoch(model, train_dataloader, optimizer, epoch_index, device)
 
         # Evaluate model on validation data.
         val_metrics = evaluate(model, val_dataloader, device)
@@ -132,23 +144,13 @@ def train(
         print(f"======= Epoch {epoch_number} =======")
         print(f'Loss train: {train_loss:.4f}, val.: {val_loss:.4f}')
         for name, value in val_metrics.items():
-            print(f"Val. {name}: {value:.3f}")
+            print(f"Val. {name}: {value:.4f}")
         print()
 
-        # Log the running loss averaged per batch for both training and validation.
-        writer.add_scalars(
-            'Training vs. Validation Loss',
-            {
-                'Train' : train_loss,
-                'Validation' : val_loss
-            },
-            epoch_number
-        )
-        writer.flush()
-
-        # Track best performance and save model state.
+        # Update best model according to loss.
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            model_path = f"model_{timestamp}_{epoch_number}"
-            torch.save(model.state_dict(), model_path)
+            best_model = model
+
+    return best_model
 

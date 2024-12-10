@@ -1,3 +1,6 @@
+from lemmatize_helper import reconstruct_lemma
+
+
 def _restore_ids(self, sentence: list[str]) -> list[str]:
     ids = []
 

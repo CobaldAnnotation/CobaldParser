@@ -130,23 +130,29 @@ class CobaldJointDataset(Dataset):
         """Collate function for dataloader."""
 
         stack_list_column = lambda column: [sample[column] for sample in samples]
-        pad_sequence_column = lambda column: torch.nn.utils.rnn.pad_sequence(
+
+        column_is_empty = lambda column: all(sample[column] is None for sample in samples)
+        # Sequence padding function.
+        maybe_pad_sequence_column = lambda column: torch.nn.utils.rnn.pad_sequence(
             [sample[column] for sample in samples],
             padding_value=padding_value,
             batch_first=True
-        )
-        pad_matrix_column = lambda column: pad_matrices(
+        ) if not column_is_empty(column) else None
+
+        # Matrix padding function.
+        maybe_pad_matrix_column = lambda column: pad_matrices(
             [samples[column] for samples in samples],
             padding_value=padding_value
-        )
+        ) if not column_is_empty(column) else None
+
         return {
             "words": stack_list_column('words'),
-            "lemma_rules": pad_sequence_column('lemma_rules'),
-            "joint_pos_feats": pad_sequence_column('joint_pos_feats'),
-            "deps_ud": pad_matrix_column('deps_ud'),
-            "deps_eud": pad_matrix_column('deps_eud'),
-            "miscs": pad_sequence_column('miscs'),
-            "deepslots": pad_sequence_column('deepslots'),
-            "semclasses": pad_sequence_column('semclasses')
+            "lemma_rules": maybe_pad_sequence_column('lemma_rules'),
+            "joint_pos_feats": maybe_pad_sequence_column('joint_pos_feats'),
+            "deps_ud": maybe_pad_matrix_column('deps_ud'),
+            "deps_eud": maybe_pad_matrix_column('deps_eud'),
+            "miscs": maybe_pad_sequence_column('miscs'),
+            "deepslots": maybe_pad_sequence_column('deepslots'),
+            "semclasses": maybe_pad_sequence_column('semclasses')
         }
 

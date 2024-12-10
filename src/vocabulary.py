@@ -1,3 +1,5 @@
+import json
+
 import torch
 from torch import Tensor
 
@@ -67,4 +69,22 @@ class Vocabulary:
     def _get_label_from_index(self, index: int, namespace: str) -> str:
         return self._idx2str[namespace][index]
 
+    def serialize(self, path: str):
+        with open(path, 'w', encoding='utf-8') as file:
+            json.dump(self._str2idx, file, ensure_ascii=False, indent=4)
+
+    @staticmethod
+    def deserialize(vocab_path: str) -> 'Vocabulary':
+        # Read str2idx dict.
+        with open(vocab_path, 'r', encoding='utf-8') as file:
+             str2idx = json.load(file)
+
+        # Create empty vocabulary object and manually fill its fields.
+        vocab = Vocabulary(samples=[], namespaces=[])
+        vocab._namespaces = set(str2idx.keys())
+        vocab._str2idx = str2idx
+        # Restore idx2str from str2idx.
+        reverse_dict = lambda d: {v: k for k, v in d.items()}
+        vocab._idx2str = {namespace: reverse_dict(label_map) for namespace, label_map in str2idx.items()}
+        return vocab
 

@@ -44,7 +44,7 @@ class CategoricalAccuracy(Metric):
         # Ensure predictions and gold_labels are of the same shape
         assert preds.shape == golds.shape, "Shape mismatch between predictions and gold labels"
         self.correct_count += torch.sum(preds == golds)
-        self.total_count += torch.nelement(golds)
+        self.total_count += torch.numel(golds)
 
     @override
     def get_average(self):

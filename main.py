@@ -153,7 +153,12 @@ def train_cmd(train_conllu_path, val_conllu_path, serialization_dir, batch_size,
     torch.save(model, model_path)
 
 
-def predict_cmd(conllu_path, serialization_dir, batch_size, device):
+def predict_cmd(
+    conllu_path,
+    serialization_dir,
+    batch_size,
+    device
+):
     # Load training vocabulary.
     vocab_path = os.path.join(serialization_dir, "vocab.json")
     vocab = Vocabulary.deserialize(vocab_path)
@@ -265,4 +270,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

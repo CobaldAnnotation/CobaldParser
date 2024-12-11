@@ -1,0 +1,7 @@
+[project]
+name = "cobald-parser"
+version = "0.1.0"
+description = "CoBaLD parser"
+requires-python = ">= 3.12"
+license = {file = "LICENSE"}
+

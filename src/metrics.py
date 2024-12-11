@@ -182,4 +182,3 @@ class MultilabelAttachmentScore(Metric):
             "UAS": self.unlabeled_score_sum / self.total_count,
             "LAS": self.labeled_score_sum / self.total_count
         }
-

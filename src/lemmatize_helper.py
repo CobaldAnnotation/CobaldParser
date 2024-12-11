@@ -62,4 +62,3 @@ def reconstruct_lemma(word: str, rule_str: str) -> str:
     lemma = lemma[:-rule.cut_suffix] if rule.cut_suffix != 0 else lemma
     lemma += rule.append_suffix
     return lemma
-

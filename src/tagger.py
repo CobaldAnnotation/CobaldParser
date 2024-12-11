@@ -101,4 +101,3 @@ class MultiHeadTagger(nn.Module):
             'semclasses': semclass_out['preds'],
             'loss': loss
         }
-

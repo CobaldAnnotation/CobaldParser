@@ -55,4 +55,3 @@ class MLPClassifier(nn.Module):
         preds = logits.argmax(dim=-1)
 
         return {'preds': preds, 'loss': loss}
-

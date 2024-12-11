@@ -84,4 +84,3 @@ class MaskedLanguageModelEncoder(nn.Module):
 
     def get_embedding_size(self) -> int:
         return self.model.config.hidden_size
-

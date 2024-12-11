@@ -147,4 +147,3 @@ def align_two_sentences(lhs: list[str], rhs: list[str]) -> tuple:
 
 def align_sentences(lhs: list[list[str]], rhs: list[list[str]]) -> tuple:
     return zip(*[align_two_sentences(l, r) for l, r in zip(lhs, rhs)])
-

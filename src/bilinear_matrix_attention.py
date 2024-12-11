@@ -1,4 +1,5 @@
-# Credits: https://github.com/allenai/allennlp/blob/main/allennlp/modules/matrix_attention/bilinear_matrix_attention.py
+# Credits:
+# https://github.com/allenai/allennlp/blob/main/allennlp/modules/matrix_attention/bilinear_matrix_attention.py
 
 import torch
 from torch import nn
@@ -72,4 +73,3 @@ class BilinearMatrixAttention(nn.Module):
         intermediate = torch.matmul(matrix_1.unsqueeze(1), weight)
         final = torch.matmul(intermediate, matrix_2.unsqueeze(1).transpose(2, 3))
         return final.squeeze(1) + self._bias
-

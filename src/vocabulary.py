@@ -87,4 +87,3 @@ class Vocabulary:
         reverse_dict = lambda d: {v: k for k, v in d.items()}
         vocab._idx2str = {namespace: reverse_dict(label_map) for namespace, label_map in str2idx.items()}
         return vocab
-

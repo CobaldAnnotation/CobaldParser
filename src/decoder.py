@@ -80,4 +80,3 @@ def decode(
         "deepslots": deepslots,
         "semclasses": semclasses
     }
-

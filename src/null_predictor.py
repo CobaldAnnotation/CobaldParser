@@ -1,5 +1,3 @@
-import numpy as np
-
 import torch
 from torch import nn
 from torch import tensor
@@ -42,13 +40,17 @@ class NullPredictor(nn.Module):
         embeddings_without_nulls = self.encoder(words_without_nulls)
 
         # Build padding mask.
-        padding_mask_without_nulls = build_padding_mask(words_without_nulls, embeddings_without_nulls.device)
+        padding_mask_without_nulls = build_padding_mask(
+            words_without_nulls,
+            embeddings_without_nulls.device
+        )
 
         # Build targets (if not at inference).
         if is_inference:
             gold_counting_mask = None
         else:
-            gold_counting_mask = self._build_counting_mask(words_with_cls).to(embeddings_without_nulls.device)
+            gold_counting_mask = self._build_counting_mask(words_with_cls)
+            gold_counting_mask = gold_counting_mask.to(embeddings_without_nulls.device)
 
         # Predict counting mask.
         classifier_output = self.null_classifier(
@@ -117,4 +119,3 @@ class NullPredictor(nn.Module):
                     sentence_with_nulls.append("#NULL")
             sentences_with_nulls.append(sentence_with_nulls)
         return sentences_with_nulls
-

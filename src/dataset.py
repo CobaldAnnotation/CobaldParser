@@ -54,10 +54,8 @@ class CobaldJointDataset(Dataset):
         if lemmas is None:
             return None
 
-        # TODO: delete if-else??
         return [
-            construct_lemma_rule(word if word is not None else '', lemma if lemma is not None else '')
-            for word, lemma in zip(words, lemmas, strict=True)
+            construct_lemma_rule(word, lemma) for word, lemma in zip(words, lemmas, strict=True)
         ]
 
     @staticmethod
@@ -155,4 +153,3 @@ class CobaldJointDataset(Dataset):
             "deepslots": maybe_pad_sequence_column('deepslots'),
             "semclasses": maybe_pad_sequence_column('semclasses')
         }
-

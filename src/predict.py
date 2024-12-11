@@ -20,9 +20,7 @@ def predict(model: nn.Module, dataloader: DataLoader, device) -> dict[str, any]:
             # Remove loss.
             output.pop("loss")
             output = {k: v.tolist() if isinstance(v, Tensor) else v for k, v in output.items()}
-            #print(output)
             # Convert dict of lists to list of dicts.
             output_unfolded = [dict(zip(output.keys(), t)) for t in zip(*output.values())]
             predictions.extend(output_unfolded)
     return predictions
-

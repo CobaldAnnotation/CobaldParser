@@ -75,4 +75,3 @@ class MorphoSyntaxSemanticsParser(nn.Module):
             'semclasses': tagger_out['semclasses'],
             'loss': loss
         }
-

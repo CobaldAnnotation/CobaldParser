@@ -38,7 +38,7 @@ class MorphoSyntaxSemanticsParser(nn.Module):
             or deps_ud is not None or deps_eud is not None or miscs is not None \
             or deepslots is not None or semclasses is not None
         # Restore nulls.
-        null_out = self.null_predictor(words, is_inference=has_labels)
+        null_out = self.null_predictor(words, is_inference=(not has_labels))
         # Words with predicted nulls.
         words_with_nulls = null_out['words']
 

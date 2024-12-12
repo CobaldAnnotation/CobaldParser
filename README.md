@@ -1,41 +1,52 @@
 # CoBaLD Parser
 
-CoBaLD parser is a neural network that allows one to annotate tokenized text (*.conllu file) in CoBaLD format.
+A neural network parser that annotates tokenized text (*.conllu file) in CoBaLD format.
 
 ## Setup
 
-First, create conda environment with python3.8 and activate it.
+Create virtual environment, install dependencies and the project itself:
 ```
-conda create --name <ENV_NAME> python=3.8
-conda activate <ENV_NAME>
-```
-
-Next install git & pip inside conda and install requirements using pip.
-(yes, it is not recommended to mix pip and conda, but in this case there is no other way to make things work, as we are building allennlp from forked repository)
-```
-conda install git pip
+python -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
+pip install .
 ```
 
 ## Usage
 
-### Training
-
-The training pipeline consists of two stages: pretraining on external conllu dataset with syntactic markup and finetuning on the target conllu file. This allows parser to learn more about syntactic structure of a sentence and significantly increases parser quality. The training pipeline is evoked with the following command:
+### Train
 ```
-./train_multistage.sh configs/<JSONNET_CONFIG> <SERIALIZATION_DIR>
+python main.py train [--batch_size BATCH_SIZE] [--n_epochs N_EPOCHS] train_conllu_path val_conllu_path serialization_dir
+
+positional arguments:
+  train_conllu_path     Path to the training .conllu file.
+  val_conllu_path       Path to the validation .conllu file.
+  serialization_dir     Path to model serialization directory. Must be empty.
+
+options:
+  --batch_size BATCH_SIZE
+                        Batch size for dataloaders.
+  --n_epochs N_EPOCHS   Number of training epochs.
 ```
-
-The external and the target datasets can be downloaded using appropriate scripts from `data` directory.
-
-### Inference
-
-The model can be inferenced using predict.sh script, which takes model.tag.gz, input conllu and output conllu as arguments.
-
 Example:
 ```
-./predict.sh serialization/distilbert-cobald-parser/model.tar.gz data/test_clean.conllu predictions/distilbert.conllu
+python main.py train data/train.conllu data/validation.conllu serialization/distilbert --batch_size=32 --n_epochs=10
 ```
 
-For pretrained models see dedicated page: https://huggingface.co/CoBaLD.
+### Predict
+```
+python main.py predict [--batch_size BATCH_SIZE] input_conllu_path output_conllu_path serialization_dir
 
+positional arguments:
+  input_conllu_path     Path to a conllu file to read unlabeled sentences from.
+  output_conllu_path    Path to a conllu file to write predictions to.
+  serialization_dir     Path to a serialization directory with saved model that will be used for inference.
+
+options:
+  --batch_size BATCH_SIZE
+                        Batch size for test dataloader.
+```
+Example:
+```
+python main.py predict data/test_clean.conllu predictions/test.conllu serialization/distilbert --batch_size=64
+```

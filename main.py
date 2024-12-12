@@ -222,7 +222,7 @@ def main():
     train_parser.add_argument(
         "serialization_dir",
         type=str,
-        help="Serialization path."
+        help="Path to model serialization directory. Must be empty."
     )
     train_parser.add_argument(
         "--batch_size",
@@ -250,9 +250,9 @@ def main():
         help="Path to a conllu file to write predictions to."
     )
     predict_parser.add_argument(
-        "model_path",
+        "serialization_dir",
         type=str,
-        help="Path to a model that will be used for inference."
+        help="Path to a serialization directory with saved model that will be used for inference."
     )
     predict_parser.add_argument(
         "--batch_size",
@@ -278,7 +278,7 @@ def main():
         predict_cmd(
             args.input_conllu_path,
             args.output_conllu_path,
-            args.model_path,
+            args.serialization_dir,
             args.batch_size,
             device
         )

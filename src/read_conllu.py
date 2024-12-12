@@ -1,21 +1,10 @@
 import conllu
 
 
-def parse_nullable_value(value: str) -> str | None:
-    return value if value else None
-
-def parse_head(value: str) -> int | None:
-    if not value:
-        return None
-    if value == '_':
-        return '-1'
-    return value
-
-
 # Conllu fields to parse.
 FIELDS = [
     "id",
-    "form",
+    "word", # Same as "form".
     "lemma",
     "upos",
     "xpos",
@@ -28,14 +17,19 @@ FIELDS = [
     "semclass"
 ]
 
-# Override default conllu parsing procedures.
+def parse_nullable_value(value: str) -> str | None:
+    return value if value else None
+
+# Default conllu parsing procedures treat _ as None.
+# We don't want this behavior, so explicitly provide the parsing procudures.
 FIELD_PARSERS = {
     "id": lambda line, i: line[i], # Do not split indexes like 1.1
     "lemma": lambda line, i: parse_nullable_value(line[i]),
-    "upos": lambda line, i: parse_nullable_value(line[i]), # Do not treat _ as None
-    "xpos": lambda line, i: parse_nullable_value(line[i]), # Do not treat _ as None
-    "feats": lambda line, i: parse_nullable_value(line[i]), # Do not treat _ as None
-    "head": lambda line, i: parse_head(line[i]),
+    "upos": lambda line, i: parse_nullable_value(line[i]),
+    "xpos": lambda line, i: parse_nullable_value(line[i]),
+    "feats": lambda line, i: parse_nullable_value(line[i]),
+    "head": lambda line, i: parse_nullable_value(line[i]),
+    "deprel": lambda line, i: parse_nullable_value(line[i]),
     "deps": lambda line, i: parse_nullable_value(line[i]),
     "misc": lambda line, i: parse_nullable_value(line[i])
 }
@@ -50,4 +44,9 @@ def read_conllu(conllu_path: str) -> list[conllu.models.TokenList]:
                 field_parsers=FIELD_PARSERS
             )
         ]
+        #for sentence in sentences:
+        #    for token in sentence:
+        #        if token["word"] == "#NULL":
+        #            print(dict(token))
+
     return sentences

@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from torch.optim import AdamW
 
 from src.dataset import CobaldJointDataset
-from src.processing import NO_ARC_LABEL, postprocess_labels
+from src.processing import NO_ARC_LABEL, postprocess
 from src.vocabulary import Vocabulary
 from src.parser import MorphoSyntaxSemanticsParser
 from src.train import train_multiple_epochs
@@ -154,13 +154,14 @@ def train_cmd(train_conllu_path, val_conllu_path, serialization_dir, batch_size,
 
 
 def predict_cmd(
-    conllu_path,
+    input_conllu_path,
+    output_conllu_path,
     serialization_dir,
     batch_size,
     device
 ):
     # Create test dataloader.
-    test_dataset = CobaldJointDataset(conllu_path)
+    test_dataset = CobaldJointDataset(input_conllu_path)
     g = torch.Generator()
     g.manual_seed(42)
     test_dataloader = DataLoader(
@@ -188,9 +189,8 @@ def predict_cmd(
     # Post-process string labels (e.g. split joint morphological features
     # into upos, xpos and feats).
     predictions: list[dict[str, str]] = [
-        postprocess_labels(**prediction) for prediction in predictions_str
+        postprocess(**prediction) for prediction in predictions_str
     ]
-    print(predictions[0])
 
 
 def main():
@@ -237,9 +237,14 @@ def main():
     # Predict mode arguments
     predict_parser = subparsers.add_parser("predict", help="Arguments for prediction mode.")
     predict_parser.add_argument(
-        "conllu_path",
+        "input_conllu_path",
         type=str,
-        help="Path to the input .conllu file for prediction."
+        help="Path to a conllu file to read unlabeled sentences from."
+    )
+    predict_parser.add_argument(
+        "output_conllu_path",
+        type=str,
+        help="Path to a conllu file to write predictions to."
     )
     predict_parser.add_argument(
         "model_path",
@@ -268,7 +273,8 @@ def main():
         )
     elif args.subparser_name == "predict":
         predict_cmd(
-            args.conllu_path,
+            args.input_conllu_path,
+            args.output_conllu_path,
             args.model_path,
             args.batch_size,
             device

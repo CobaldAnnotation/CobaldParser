@@ -33,7 +33,7 @@ def evaluate(model: nn.Module, dataloader: DataLoader, device) -> dict[str, floa
     semclass_accuracy_scorer = CategoricalAccuracy()
     semclass_f1_scorer = F1Measure(average='macro')
     # Null scorer.
-    # Null prediction is a binary classification, so micro F1 = binary F1.
+    # Null prediction is a binary classification, so micro F1 = binary F1 in this case.
     null_scorer = F1Measure(average='micro')
 
     sum_loss = 0.

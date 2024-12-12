@@ -8,9 +8,9 @@ from torch.utils.data import DataLoader
 from src.utils import build_padding_mask
 
 
-def _unfold_batch(batch: dict[str, Tensor | list]) -> list[dict[str, list]]:
+def _unfold_and_mask(batch: dict[str, Tensor | list]) -> list[dict[str, list]]:
     """
-    Convert dict of lists to list of dicts.
+    Unfolds dict of lists to list of single-element dicts.
     """
     # Isolate words from the labels.
     words = batch.pop("words")
@@ -44,6 +44,6 @@ def predict(model: nn.Module, dataloader: DataLoader, device) -> dict[str, Tenso
             output = model(**batch)
             # Remove loss.
             output.pop("loss")
-            samples = _unfold_batch(output)
+            samples = _unfold_and_mask(output)
             predictions.extend(samples)
     return predictions

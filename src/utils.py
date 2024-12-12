@@ -1,11 +1,7 @@
 import ast
 
 import torch
-from torch import tensor
-
-
-def collect_values(dicts: list[dict], key: str) -> list[any]:
-    return [item[key] for item in dicts]
+from torch import Tensor
 
 
 def recursive_find_unique(data) -> set:
@@ -28,14 +24,14 @@ def recursive_replace(data, transform):
     Recursively replace elements in a list or nested lists according to a replacement map.
 
     :param data: The list (or nested lists) to process.
-    :param replace_map: A dictionary mapping elements to their replacements.
+    :param transform: A function mapping elements to their replacements.
     :return: A new list with elements replaced.
     """
     if isinstance(data, list):
         # Process each element in the list
         return [recursive_replace(element, transform) for element in data]
     else:
-        # Replace the element if it's in the map, otherwise return as is
+        # Replace the element.
         return transform(data)
 
 
@@ -44,10 +40,10 @@ def dict_from_str(s: str) -> dict:
     return ast.literal_eval(s)
 
 
-def pad_sequences(sequences: list[tensor], padding_value: int) -> tensor:
+def pad_sequences(sequences: list[Tensor], padding_value: int) -> Tensor:
     return torch.nn.utils.rnn.pad_sequence(sequences, padding_value=padding_value, batch_first=True)
 
-def pad_matrices(matrices: list[tensor], padding_value: int) -> tensor:
+def pad_matrices(matrices: list[Tensor], padding_value: int) -> Tensor:
     """
     Pad square matrices so that each matrix is padded to the right and bottom.
     Basically a torch.nn.utils.rnn.pad_sequence for matrices.
@@ -66,21 +62,21 @@ def pad_matrices(matrices: list[tensor], padding_value: int) -> tensor:
     return padded_tensor
 
 
-def build_condition_mask(sentences: list[list[str]], condition_fn: callable, device) -> tensor:
+def build_condition_mask(sentences: list[list[str]], condition_fn: callable, device) -> Tensor:
     masks = [
         torch.tensor([condition_fn(word) for word in sentence], dtype=bool, device=device)
         for sentence in sentences
     ]
     return pad_sequences(masks, padding_value=False)
 
-def build_padding_mask(sentences: list[list[str]], device) -> tensor:
+def build_padding_mask(sentences: list[list[str]], device) -> Tensor:
     return build_condition_mask(sentences, condition_fn=lambda word: True, device=device)
 
-def build_null_mask(sentences: list[list[str]], device) -> tensor:
+def build_null_mask(sentences: list[list[str]], device) -> Tensor:
     return build_condition_mask(sentences, condition_fn=lambda word: word == "#NULL", device=device)
 
 
-def pairwise_mask(masks1d: tensor) -> tensor:
+def pairwise_mask(masks1d: Tensor) -> Tensor:
     """
     Calculate an outer product of a mask, i.e. masks2d[:, i, j] = masks1d[:, i] * masks1d[:, j].
     Example:
@@ -101,7 +97,7 @@ def pairwise_mask(masks1d: tensor) -> tensor:
 
 
 # Credits: https://docs.allennlp.org/main/api/nn/util/#replace_masked_values
-def replace_masked_values(tensor: tensor, mask: tensor, replace_with: float):
+def replace_masked_values(tensor: Tensor, mask: Tensor, replace_with: float):
     assert tensor.dim() == mask.dim(), "tensor.dim() of {tensor.dim()} != mask.dim() of {mask.dim()}"
     tensor.masked_fill_(~mask, replace_with)
 

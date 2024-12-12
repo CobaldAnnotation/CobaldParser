@@ -1,5 +1,5 @@
 from torch import nn
-from torch import tensor
+from torch import LongTensor
 
 from mlp_classifier import MLPClassifier
 from dependency_classifier import DependencyClassifier
@@ -54,13 +54,13 @@ class MultiHeadTagger(nn.Module):
     def forward(
         self,
         words: list[list[str]],
-        lemma_rules: tensor = None,
-        joint_pos_feats: tensor = None,
-        deps_ud: tensor = None,
-        deps_eud: tensor = None,
-        miscs: tensor = None,
-        deepslots: tensor = None,
-        semclasses: tensor = None
+        lemma_rules: LongTensor = None,
+        joint_pos_feats: LongTensor = None,
+        deps_ud: LongTensor = None,
+        deps_eud: LongTensor = None,
+        miscs: LongTensor = None,
+        deepslots: LongTensor = None,
+        semclasses: LongTensor = None
     ) -> dict[str, any]:
 
         # [batch_size, seq_len, embedding_size]

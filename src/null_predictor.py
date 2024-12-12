@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from torch import tensor
+from torch import Tensor
 
 from mlp_classifier import MLPClassifier
 from encoder import MaskedLanguageModelEncoder
@@ -30,7 +30,7 @@ class NullPredictor(nn.Module):
             class_weights=class_weights
         )
 
-    def forward(self, words: list[list[str]], is_inference: bool) -> dict[str, tensor]:
+    def forward(self, words: list[list[str]], is_inference: bool) -> dict[str, any]:
         # Extra [CLS] token accounts for the case when #NULL is the first token in a sentence.
         words_with_cls = self._prepend_cls(words)
 
@@ -68,12 +68,12 @@ class NullPredictor(nn.Module):
         }
 
     @staticmethod
-    def _build_counting_mask(sentences: list[list[str]]) -> tensor:
+    def _build_counting_mask(sentences: list[list[str]]) -> Tensor:
         """
         Count the number of nulls following each non-null token for a bunch of sentences.
         output[i, j] = N means j-th non-null token in i-th sentence in followed by N nulls.
         """
-        counting_masks: list[tensor] = []
+        counting_masks: list[Tensor] = []
 
         for sentence in sentences:
             nonnull_words_idxs = [i for i, word in enumerate(sentence) if word != "#NULL"]
@@ -102,7 +102,7 @@ class NullPredictor(nn.Module):
         return [[word for word in sentence if word != "#NULL"] for sentence in sentences]
 
     @staticmethod
-    def _add_nulls(sentences: list[list[str]], counting_masks: tensor) -> list[list[str]]:
+    def _add_nulls(sentences: list[list[str]], counting_masks: Tensor) -> list[list[str]]:
         """
         Return a copy of sentences with nulls restored according to counting masks.
         """

@@ -14,9 +14,6 @@ from chu_liu_edmonds import decode_mst
 from utils import pairwise_mask, replace_masked_values
 
 
-NO_ARC_VALUE = -1
-
-
 class DependencyHeadBase(nn.Module):
     def __init__(self, hidden_size: int, n_rels: int):
         super().__init__()
@@ -267,13 +264,13 @@ class DependencyClassifier(nn.Module):
         h_rel_head = self.rel_head_mlp(embeddings)
         h_rel_dep = self.rel_dep_mlp(embeddings)
 
-        # Share the same h vectors in both dependency and multi-dependency heads.
+        # Share the h vectors between dependency and multi-dependency heads.
         output_ud = self.dependency_head_ud(
             h_arc_head,
             h_arc_dep,
             h_rel_head,
             h_rel_dep,
-            gold_arcs=(gold_ud != NO_ARC_VALUE),
+            gold_arcs=(gold_ud != -1), # Absent arcs have value of -1.
             gold_rels=gold_ud,
             mask=mask_ud
         )
@@ -282,7 +279,7 @@ class DependencyClassifier(nn.Module):
             h_arc_dep,
             h_rel_head,
             h_rel_dep,
-            gold_arcs=(gold_eud != NO_ARC_VALUE),
+            gold_arcs=(gold_eud != -1), # Absent arcs have value of -1.
             gold_rels=gold_eud,
             mask=mask_eud
         )
@@ -293,4 +290,3 @@ class DependencyClassifier(nn.Module):
             'loss_ud': output_ud["loss"],
             'loss_eud': output_eud["loss"]
         }
-

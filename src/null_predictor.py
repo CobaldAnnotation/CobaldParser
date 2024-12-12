@@ -4,7 +4,7 @@ from torch import tensor
 
 from mlp_classifier import MLPClassifier
 from encoder import MaskedLanguageModelEncoder
-from utils import build_padding_mask
+from utils import build_padding_mask, pad_sequences
 
 
 class NullPredictor(nn.Module):
@@ -82,13 +82,9 @@ class NullPredictor(nn.Module):
             counting_mask = torch.diff(nonnull_words_idxs) - 1
             counting_masks.append(counting_mask)
 
-        counting_masks_batched = torch.nn.utils.rnn.pad_sequence(
-            counting_masks,
-            batch_first=True,
-            # Use -1 to make sure it is never attended to.
-            # (if it is, the CUDA will terminate with an error that classes must be positive).
-            padding_value=-1
-        )
+        # Use -1 to make sure it is never attended to.
+        # (if it is, the CUDA will terminate with an error that classes must be positive).
+        counting_masks_batched = pad_sequences(counting_masks, padding_value=-1)
         return counting_masks_batched.long()
 
     @staticmethod

@@ -9,12 +9,12 @@ import torch
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 
-from dataset import CobaldJointDataset, NO_ARC_LABEL
-from vocabulary import Vocabulary
-from parser import MorphoSyntaxSemanticsParser
-from dependency_classifier import NO_ARC_VALUE
-from train import train_multiple_epochs
-from predict import predict
+from src.dataset import CobaldJointDataset
+from src.processing import NO_ARC_LABEL, postprocess_labels
+from src.vocabulary import Vocabulary
+from src.parser import MorphoSyntaxSemanticsParser
+from src.train import train_multiple_epochs
+from src.predict import predict
 
 
 def seed_everything(seed: int):
@@ -52,9 +52,9 @@ def train_cmd(train_conllu_path, val_conllu_path, serialization_dir, batch_size,
         ]
     )
     # Make sure absent arcs have a value of -1, because positive values
-    # indicate dependency relations.
-    vocab.replace_index(NO_ARC_LABEL, NO_ARC_VALUE, namespace="deps_ud")
-    vocab.replace_index(NO_ARC_LABEL, NO_ARC_VALUE, namespace="deps_eud")
+    # indicate dependency relations ids.
+    vocab.replace_index(NO_ARC_LABEL, -1, namespace="deps_ud")
+    vocab.replace_index(NO_ARC_LABEL, -1, namespace="deps_eud")
 
     # Create actual training and validation datasets.
     transform = lambda sample: vocab.encode(sample)
@@ -159,11 +159,8 @@ def predict_cmd(
     batch_size,
     device
 ):
-    # Load training vocabulary.
-    vocab_path = os.path.join(serialization_dir, "vocab.json")
-    vocab = Vocabulary.deserialize(vocab_path)
-    test_dataset = CobaldJointDataset(conllu_path)
     # Create test dataloader.
+    test_dataset = CobaldJointDataset(conllu_path)
     g = torch.Generator()
     g.manual_seed(42)
     test_dataloader = DataLoader(
@@ -178,9 +175,22 @@ def predict_cmd(
     # Load model from a disk.
     model_path = os.path.join(serialization_dir, "model.bin")
     model = torch.load(model_path, weights_only=False)
-    predictions = predict(model, test_dataloader, device)
+    # Run model.
+    predictions_int: list[dict[str, int]] = predict(model, test_dataloader, device)
 
-    print(f"N predictions: {len(predictions)}\nexample: {predictions[0]}")
+    # Load training vocabulary.
+    vocab_path = os.path.join(serialization_dir, "vocab.json")
+    vocab = Vocabulary.deserialize(vocab_path)
+    # Decode predictions from indexes to string labels.
+    predictions_str: list[dict[str, str]] = [
+        vocab.decode(prediction) for prediction in predictions_int
+    ]
+    # Post-process string labels (e.g. split joint morphological features
+    # into upos, xpos and feats).
+    predictions: list[dict[str, str]] = [
+        postprocess_labels(**prediction) for prediction in predictions_str
+    ]
+    print(predictions[0])
 
 
 def main():

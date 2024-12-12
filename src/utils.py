@@ -4,6 +4,10 @@ import torch
 from torch import tensor
 
 
+def collect_values(dicts: list[dict], key: str) -> list[any]:
+    return [item[key] for item in dicts]
+
+
 def recursive_find_unique(data) -> set:
     """
     Recursively find all unique elements in a list or nested lists.
@@ -35,26 +39,15 @@ def recursive_replace(data, transform):
         return transform(data)
 
 
-def build_condition_mask(sentences: list[list[str]], condition_fn: callable, device) -> tensor:
-    masks = [
-        torch.tensor([condition_fn(word) for word in sentence], dtype=bool, device=device)
-        for sentence in sentences
-    ]
-    return torch.nn.utils.rnn.pad_sequence(masks, batch_first=True, padding_value=False)
-
-def build_padding_mask(sentences: list[list[str]], device) -> tensor:
-    return build_condition_mask(sentences, condition_fn=lambda word: True, device=device)
-
-def build_null_mask(sentences: list[list[str]], device) -> tensor:
-    return build_condition_mask(sentences, condition_fn=lambda word: word == "#NULL", device=device)
-
-
 def dict_from_str(s: str) -> dict:
     """Convert a string representation of a dict to a dict. (Yes, one cannot simply convert str to dict...)"""
     return ast.literal_eval(s)
 
 
-def pad_matrices(matrices: list[tensor], padding_value: int = 0) -> tensor:
+def pad_sequences(sequences: list[tensor], padding_value: int) -> tensor:
+    return torch.nn.utils.rnn.pad_sequence(sequences, padding_value=padding_value, batch_first=True)
+
+def pad_matrices(matrices: list[tensor], padding_value: int) -> tensor:
     """
     Pad square matrices so that each matrix is padded to the right and bottom.
     Basically a torch.nn.utils.rnn.pad_sequence for matrices.
@@ -71,6 +64,20 @@ def pad_matrices(matrices: list[tensor], padding_value: int = 0) -> tensor:
     for i, matrix in enumerate(matrices):
         padded_tensor[i, :matrix.size(0), :matrix.size(1)] = matrix
     return padded_tensor
+
+
+def build_condition_mask(sentences: list[list[str]], condition_fn: callable, device) -> tensor:
+    masks = [
+        torch.tensor([condition_fn(word) for word in sentence], dtype=bool, device=device)
+        for sentence in sentences
+    ]
+    return pad_sequences(masks, padding_value=False)
+
+def build_padding_mask(sentences: list[list[str]], device) -> tensor:
+    return build_condition_mask(sentences, condition_fn=lambda word: True, device=device)
+
+def build_null_mask(sentences: list[list[str]], device) -> tensor:
+    return build_condition_mask(sentences, condition_fn=lambda word: word == "#NULL", device=device)
 
 
 def pairwise_mask(masks1d: tensor) -> tensor:

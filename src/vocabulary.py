@@ -3,7 +3,7 @@ import json
 import torch
 from torch import Tensor
 
-from utils import recursive_find_unique, recursive_replace
+from src.utils import recursive_find_unique, recursive_replace
 
 
 class Vocabulary:
@@ -40,8 +40,8 @@ class Vocabulary:
         for namespace, indexes in encoded_sample.items():
             if namespace in self._namespaces:
                 # Avoid iterating over tensors.
-                assert isinstance(indexes, Tensor)
-                indexes = indexes.tolist()
+                if isinstance(indexes, Tensor):
+                    indexes = indexes.tolist()
                 decoded_sample[namespace] = recursive_replace(
                     indexes,
                     lambda index: self._get_label_from_index(index, namespace)

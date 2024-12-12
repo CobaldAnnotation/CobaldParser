@@ -3,7 +3,6 @@ from overrides import override
 import torch
 from torch import Tensor
 
-from dependency_classifier import NO_ARC_VALUE
 from utils import replace_masked_values
 
 
@@ -143,12 +142,14 @@ class MultilabelAttachmentScore(Metric):
         assert preds.shape == golds.shape, "Shape mismatch between predictions and gold labels"
         if mask is not None:
             assert preds.shape == mask.shape
-            replace_masked_values(preds, mask, NO_ARC_VALUE)
-            replace_masked_values(golds, mask, NO_ARC_VALUE)
+            # Replace masked arcs with -1.
+            replace_masked_values(preds, mask, -1)
+            replace_masked_values(golds, mask, -1)
 
+        # Select present arcs.
         # [batch_size, seq_len, seq_len]
-        pred_arcs = (preds != NO_ARC_VALUE)
-        gold_arcs = (golds != NO_ARC_VALUE)
+        pred_arcs = (preds != -1)
+        gold_arcs = (golds != -1)
         # [batch_size, seq_len, seq_len]
         intersecting_arcs = pred_arcs.logical_and(gold_arcs)
         # Sum along all dimentions but batch_size, because attachment scores must be

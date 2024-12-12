@@ -15,6 +15,10 @@ from utils import pairwise_mask, replace_masked_values
 
 
 class DependencyHeadBase(nn.Module):
+    """
+    Base class for scoring arcs and relations between tokens in a dependency tree/graph.
+    """
+
     def __init__(self, hidden_size: int, n_rels: int):
         super().__init__()
 
@@ -74,6 +78,14 @@ class DependencyHeadBase(nn.Module):
 
     ### Abstract (virtual) methods ###
 
+    def predict_arcs(
+        self,
+        s_arc: Tensor,   # [batch_size, seq_len, seq_len]
+        mask: BoolTensor # [batch_size, seq_len]
+    ) -> Tensor:
+        """Predict arcs from scores."""
+        raise NotImplementedError
+
     def calc_loss(
         self,
         s_arc: Tensor,         # [batch_size, seq_len, seq_len]
@@ -82,18 +94,14 @@ class DependencyHeadBase(nn.Module):
         gold_rels: LongTensor, # [batch_size, seq_len, seq_len]
         mask: BoolTensor       # [batch_size, seq_len]
     ) -> tuple[Tensor, Tensor]:
-        raise NotImplementedError
-
-    def predict_arcs(
-        self,
-        s_arc: Tensor,   # [batch_size, seq_len, seq_len]
-        mask: BoolTensor # [batch_size, seq_len]
-    ) -> Tensor:
+        """Calculate arc and relation loss."""
         raise NotImplementedError
 
 
 class DependencyHead(DependencyHeadBase):
-    """UD dependency head."""
+    """
+    Basic UD syntax specialization that predicts single edge for each token.
+    """
 
     @override
     def predict_arcs(
@@ -181,7 +189,9 @@ class DependencyHead(DependencyHeadBase):
 
 
 class MultiDependencyHead(DependencyHeadBase):
-    """Enhanced UD dependency head."""
+    """
+    Enhanced UD syntax specialization that predicts multiple edges for each token.
+    """
 
     @override
     def predict_arcs(
@@ -217,11 +227,6 @@ class MultiDependencyHead(DependencyHeadBase):
 class DependencyClassifier(nn.Module):
     """
     Dozat and Manning's biaffine dependency classifier.
-    I have not found any open-source implementation that can be used as a part
-    of a bigger model. Mostly those are standalone parsers that take text
-    as input, but we need dependency classifier to take sentence embeddings as input.
-    ...so I implemented it on my own.
-    It might be not 100% correct, but it does its job.
     """
 
     def __init__(

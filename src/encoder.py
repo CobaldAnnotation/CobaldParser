@@ -6,6 +6,9 @@ from transformers import AutoTokenizer, AutoModel
 
 
 class MaskedLanguageModelEncoder(nn.Module):
+    """
+    Encodes sentences into word-level embeddings using a pretrained MLM transformer.
+    """
     def __init__(self,
         model_name: str,
         tokenizer_args: dict = {},
@@ -21,7 +24,14 @@ class MaskedLanguageModelEncoder(nn.Module):
         for param in self.model.parameters():
             param.requires_grad = train_parameters
 
-    def forward(self, words: list[list[str]]) -> dict[str, Tensor]:
+    def forward(self, words: list[list[str]]) -> Tensor:
+        """
+        Build words embeddings.
+
+        - Tokenizes input sentences into subtokens.
+        - Passes the subtokens through the pre-trained transformer model.
+        - Aggregates subtoken embeddings into word embeddings using mean pooling.
+        """
         batch_size = len(words)
 
         # BPE tokenization: split words into subtokens, e.g. ['kidding'] -> ['▁ki', 'dding'].
@@ -56,7 +66,12 @@ class MaskedLanguageModelEncoder(nn.Module):
         subtokens_embeddings: Tensor, # [batch_size, n_subtokens, embedding_size]
         words_ids: Tensor             # [batch_size, n_subtokens]
     ) -> Tensor:
+        """
+        Aggregate subtoken embeddings into word embeddings by averaging.
 
+        This method ensures that multiple subtokens corresponding to a single word are combined
+        into a single embedding.
+        """
         batch_size, n_subtokens, embedding_size = subtokens_embeddings.shape
         # The number of words in a sentence plus an "auxiliary" word in the beginnig.
         n_words = torch.max(words_ids) + 1
@@ -83,4 +98,5 @@ class MaskedLanguageModelEncoder(nn.Module):
         return words_embeddings
 
     def get_embedding_size(self) -> int:
+        """Returns the embedding size of the transformer model, e.g. 768 for BERT."""
         return self.model.config.hidden_size

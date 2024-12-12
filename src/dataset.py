@@ -8,13 +8,14 @@ from src.utils import pad_sequences, pad_matrices
 
 
 class CobaldJointDataset(Dataset):
-    def __init__(self, conllu_path: str, transform = None):
+    def __init__(self, conllu_path: str, transform: callable = None):
         super().__init__()
 
         self._samples = []
         for sentence in read_conllu(conllu_path):
             sample = preprocess(sentence)
             self._samples.append(sample)
+
         self._transform = transform
 
     def __len__(self):

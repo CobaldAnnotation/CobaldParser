@@ -1,5 +1,3 @@
-import ast
-
 import torch
 from torch import Tensor
 
@@ -35,23 +33,22 @@ def recursive_replace(data, transform):
         return transform(data)
 
 
-def dict_from_str(s: str) -> dict:
-    """Convert a string representation of a dict to a dict. (Yes, one cannot simply convert str to dict...)"""
-    return ast.literal_eval(s)
-
-
 def pad_sequences(sequences: list[Tensor], padding_value: int) -> Tensor:
+    """
+    Stack 1d tensors (sequences) into a single 2d tensor so that each sequence is padded on the
+    right.
+    """
     return torch.nn.utils.rnn.pad_sequence(sequences, padding_value=padding_value, batch_first=True)
 
 def pad_matrices(matrices: list[Tensor], padding_value: int) -> Tensor:
     """
-    Pad square matrices so that each matrix is padded to the right and bottom.
-    Basically a torch.nn.utils.rnn.pad_sequence for matrices.
+    Stack 2d tensors (matrices) into a single 3d tensor so that each matrix is padded on the
+    right and bottom.
     """
     # Determine the maximum size in each dimension
     max_height = max(t.size(0) for t in matrices)
     max_width = max(t.size(1) for t in matrices)
-    assert max_height == max_width, "UD and E-UD matrices must be square."
+    assert max_height == max_width, "Matrices must be square."
 
     # Create a single tensor for all matrices
     padded_tensor = torch.full((len(matrices), max_height, max_width), padding_value)
@@ -62,7 +59,7 @@ def pad_matrices(matrices: list[Tensor], padding_value: int) -> Tensor:
     return padded_tensor
 
 
-def build_condition_mask(sentences: list[list[str]], condition_fn: callable, device) -> Tensor:
+def _build_condition_mask(sentences: list[list[str]], condition_fn: callable, device) -> Tensor:
     masks = [
         torch.tensor([condition_fn(word) for word in sentence], dtype=bool, device=device)
         for sentence in sentences
@@ -70,10 +67,10 @@ def build_condition_mask(sentences: list[list[str]], condition_fn: callable, dev
     return pad_sequences(masks, padding_value=False)
 
 def build_padding_mask(sentences: list[list[str]], device) -> Tensor:
-    return build_condition_mask(sentences, condition_fn=lambda word: True, device=device)
+    return _build_condition_mask(sentences, condition_fn=lambda word: True, device=device)
 
 def build_null_mask(sentences: list[list[str]], device) -> Tensor:
-    return build_condition_mask(sentences, condition_fn=lambda word: word == "#NULL", device=device)
+    return _build_condition_mask(sentences, condition_fn=lambda word: word == "#NULL", device=device)
 
 
 def pairwise_mask(masks1d: Tensor) -> Tensor:
@@ -98,6 +95,9 @@ def pairwise_mask(masks1d: Tensor) -> Tensor:
 
 # Credits: https://docs.allennlp.org/main/api/nn/util/#replace_masked_values
 def replace_masked_values(tensor: Tensor, mask: Tensor, replace_with: float):
+    """
+    Replace all masked values in tensor with `replace_with`.
+    """
     assert tensor.dim() == mask.dim(), "tensor.dim() of {tensor.dim()} != mask.dim() of {mask.dim()}"
     tensor.masked_fill_(~mask, replace_with)
 

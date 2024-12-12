@@ -1,5 +1,6 @@
-# Credits:
-# https://github.com/allenai/allennlp/blob/main/allennlp/modules/matrix_attention/bilinear_matrix_attention.py
+"""
+Credits: github.com/allenai/allennlp
+"""
 
 import torch
 from torch import nn

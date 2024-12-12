@@ -1,7 +1,6 @@
 import conllu
 from collections import defaultdict
 
-
 from src.lemmatize_helper import construct_lemma_rule, reconstruct_lemma
 
 

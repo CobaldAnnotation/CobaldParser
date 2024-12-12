@@ -44,9 +44,4 @@ def read_conllu(conllu_path: str) -> list[conllu.models.TokenList]:
                 field_parsers=FIELD_PARSERS
             )
         ]
-        #for sentence in sentences:
-        #    for token in sentence:
-        #        if token["word"] == "#NULL":
-        #            print(dict(token))
-
     return sentences

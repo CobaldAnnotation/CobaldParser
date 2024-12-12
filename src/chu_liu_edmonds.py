@@ -1,5 +1,6 @@
-# Credits: https://github.com/allenai/allennlp/blob/v2.10.1/allennlp/nn/chu_liu_edmonds.py
-
+"""
+Credits: https://github.com/allenai/allennlp
+"""
 
 import numpy as np
 

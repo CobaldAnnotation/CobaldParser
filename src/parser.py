@@ -1,9 +1,9 @@
 from torch import nn
 from torch import Tensor
 
-from null_predictor import NullPredictor
-from tagger import MultiHeadTagger
-from encoder import MaskedLanguageModelEncoder
+from src.null_predictor import NullPredictor
+from src.tagger import MultiHeadTagger
+from src.encoder import MaskedLanguageModelEncoder
 
 
 class MorphoSyntaxSemanticsParser(nn.Module):

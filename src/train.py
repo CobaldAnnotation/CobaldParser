@@ -9,8 +9,8 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torch.optim import Optimizer
 
-from metrics import CategoricalAccuracy, F1Measure, MultilabelAttachmentScore
-from utils import build_padding_mask, build_null_mask, pairwise_mask, align_sentences
+from src.metrics import CategoricalAccuracy, F1Measure, MultilabelAttachmentScore
+from src.utils import build_padding_mask, build_null_mask, pairwise_mask, align_sentences
 
 
 def evaluate(model: nn.Module, dataloader: DataLoader, device) -> dict[str, float]:

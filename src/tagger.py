@@ -1,10 +1,10 @@
 from torch import nn
 from torch import LongTensor
 
-from mlp_classifier import MLPClassifier
-from dependency_classifier import DependencyClassifier
-from encoder import MaskedLanguageModelEncoder
-from utils import build_padding_mask, build_null_mask
+from src.mlp_classifier import MLPClassifier
+from src.dependency_classifier import DependencyClassifier
+from src.encoder import MaskedLanguageModelEncoder
+from src.utils import build_padding_mask, build_null_mask
 
 
 class MultiHeadTagger(nn.Module):

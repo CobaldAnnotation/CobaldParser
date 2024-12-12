@@ -2,9 +2,9 @@ import torch
 from torch import nn
 from torch import Tensor
 
-from mlp_classifier import MLPClassifier
-from encoder import MaskedLanguageModelEncoder
-from utils import build_padding_mask, pad_sequences
+from src.mlp_classifier import MLPClassifier
+from src.encoder import MaskedLanguageModelEncoder
+from src.utils import build_padding_mask, pad_sequences
 
 
 class NullPredictor(nn.Module):

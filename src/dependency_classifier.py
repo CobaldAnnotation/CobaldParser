@@ -8,10 +8,10 @@ from torch import nn
 from torch import Tensor, BoolTensor, LongTensor
 import torch.nn.functional as F
 
-from mlp_classifier import ACT2FN
-from bilinear_matrix_attention import BilinearMatrixAttention
-from chu_liu_edmonds import decode_mst
-from utils import pairwise_mask, replace_masked_values
+from src.mlp_classifier import ACT2FN
+from src.bilinear_matrix_attention import BilinearMatrixAttention
+from src.chu_liu_edmonds import decode_mst
+from src.utils import pairwise_mask, replace_masked_values
 
 
 class DependencyHeadBase(nn.Module):

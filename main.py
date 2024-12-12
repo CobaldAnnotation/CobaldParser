@@ -191,6 +191,9 @@ def predict_cmd(
     predictions: list[dict[str, str]] = [
         postprocess(**prediction) for prediction in predictions_str
     ]
+    with open(output_conllu_path, 'w') as file:
+        for prediction in predictions:
+            file.write(prediction.serialize())
 
 
 def main():

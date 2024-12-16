@@ -39,7 +39,7 @@ def _build_arcs(token_deps: dict[int, str], current_index: int, sentence_length:
     return arcs
 
 
-def preprocess(sentence: list[conllu.models.TokenList]) -> dict[str, list]:
+def preprocess(sentence: conllu.models.TokenList) -> dict[str, list]:
     ids = [token["id"] for token in sentence]
     # Renumerate ids so that #NULLs get integer ids, e.g. [1, 1.1, 2] turns into [1, 2, 3]).
     # -1 accounts for empty head, while 0 accounts for `root`.

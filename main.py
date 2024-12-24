@@ -1,7 +1,10 @@
-import argparse
 import sys
-
 import os
+import argparse
+import shutil
+
+import json
+
 import random
 import numpy as np
 
@@ -34,39 +37,52 @@ def seed_worker(worker_id):
     random.seed(worker_seed)
 
 
-def train_cmd(train_conllu_path, val_conllu_path, serialization_dir, batch_size, n_epochs, device):
+def train_cmd(train_conllu_file, val_conllu_file, config_file, serialization_dir, device):
+    # Read configuration json.
+    with open(config_file, 'r') as file:
+        config: dict = json.load(file)
+
     # Create raw training dataset to build vocabulary upon.
-    raw_train_dataset = CobaldJointDataset(train_conllu_path)
+    raw_train_dataset = CobaldJointDataset(train_conllu_file)
+    # Label namespaces.
+    namespaces = [
+        "lemma_rules",
+        "joint_pos_feats",
+        "deps_ud",
+        "deps_eud",
+        "miscs",
+        "deepslots",
+        "semclasses"
+    ]
     # Build training vocabulary that maps string labels into integers.
-    vocab = Vocabulary(
-        raw_train_dataset,
-        # Namespaces to encode.
-        namespaces=[
-            "lemma_rules",
-            "joint_pos_feats",
-            "deps_ud",
-            "deps_eud",
-            "miscs",
-            "deepslots",
-            "semclasses"
-        ]
-    )
+    vocab = Vocabulary(raw_train_dataset, namespaces)
     # Make sure absent arcs have a value of -1, because positive values
     # indicate dependency relations ids.
     vocab.replace_index(NO_ARC_LABEL, -1, namespace="deps_ud")
     vocab.replace_index(NO_ARC_LABEL, -1, namespace="deps_eud")
 
+    # Do not list number of classes in configuration file.
+    # Instead, automatically fill them at runtime for convenience.
+    tagger_args = config["model_args"]["tagger_args"]
+    tagger_args["lemma_rule_classifier_args"]["n_classes"] = vocab.get_namespace_size("lemma_rules")
+    tagger_args["pos_feats_classifier_args"]["n_classes"] = vocab.get_namespace_size("joint_pos_feats")
+    tagger_args["depencency_classifier_args"]["n_rels_ud"] = vocab.get_namespace_size("deps_ud")
+    tagger_args["depencency_classifier_args"]["n_rels_eud"] = vocab.get_namespace_size("deps_eud")
+    tagger_args["misc_classifier_args"]["n_classes"] = vocab.get_namespace_size("miscs")
+    tagger_args["deepslot_classifier_args"]["n_classes"] = vocab.get_namespace_size("deepslots")
+    tagger_args["semclass_classifier_args"]["n_classes"] = vocab.get_namespace_size("semclasses")
+
     # Create actual training and validation datasets.
     transform = lambda sample: vocab.encode(sample)
-    train_dataset = CobaldJointDataset(train_conllu_path, transform)
-    val_dataset = CobaldJointDataset(val_conllu_path, transform)
+    train_dataset = CobaldJointDataset(train_conllu_file, transform)
+    val_dataset = CobaldJointDataset(val_conllu_file, transform)
 
     # Create dataloaders.
     g = torch.Generator()
     g.manual_seed(42)
     train_dataloader = DataLoader(
         train_dataset,
-        batch_size=batch_size,
+        batch_size=config["batch_size"],
         collate_fn=CobaldJointDataset.collate_fn,
         shuffle=True,
         worker_init_fn=seed_worker,
@@ -74,7 +90,7 @@ def train_cmd(train_conllu_path, val_conllu_path, serialization_dir, batch_size,
     )
     val_dataloader = DataLoader(
         val_dataset,
-        batch_size=batch_size,
+        batch_size=config["batch_size"],
         collate_fn=CobaldJointDataset.collate_fn,
         shuffle=False,
         worker_init_fn=seed_worker,
@@ -82,67 +98,16 @@ def train_cmd(train_conllu_path, val_conllu_path, serialization_dir, batch_size,
     )
 
     # Create model.
-    model_args = {
-        "encoder_args": {
-            "model_name": "distilbert-base-uncased",
-            "train_parameters": True
-        },
-        "null_predictor_args": {
-            "hidden_size": 512,
-            "activation": "relu",
-            "dropout": 0.1,
-            "consecutive_null_limit": 2
-        },
-        "tagger_args": {
-            "lemma_rule_classifier_args": {
-                "hidden_size": 512,
-                "n_classes": vocab.get_namespace_size("lemma_rules"),
-                "activation": "relu",
-                "dropout": 0.1,
-            },
-            "pos_feats_classifier_args": {
-                "hidden_size": 512,
-                "n_classes": vocab.get_namespace_size("joint_pos_feats"),
-                "activation": "relu",
-                "dropout": 0.1,
-            },
-            "depencency_classifier_args": {
-                "hidden_size": 128,
-                "n_rels_ud": vocab.get_namespace_size("deps_ud"),
-                "n_rels_eud": vocab.get_namespace_size("deps_eud"),
-                "activation": "relu",
-                "dropout": 0.1,
-            },
-            "misc_classifier_args": {
-                "hidden_size": 256,
-                "n_classes": vocab.get_namespace_size("miscs"),
-                "activation": "relu",
-                "dropout": 0.1,
-            },
-            "deepslot_classifier_args": {
-                "hidden_size": 512,
-                "n_classes": vocab.get_namespace_size("deepslots"),
-                "activation": "relu",
-                "dropout": 0.1,
-            },
-            "semclass_classifier_args": {
-                "hidden_size": 512,
-                "n_classes": vocab.get_namespace_size("semclasses"),
-                "activation": "relu",
-                "dropout": 0.1,
-            }
-        }
-    }
-    model = MorphoSyntaxSemanticsParser(**model_args)
+    model = MorphoSyntaxSemanticsParser(**config["model_args"])
 
     # Train model.
-    optimizer = AdamW(model.parameters(), lr=3e-4)
+    optimizer = AdamW(model.parameters(), **config["optimizer_args"])
     best_model = train_multiple_epochs(
         model,
         train_dataloader,
         val_dataloader,
         optimizer,
-        n_epochs,
+        config["n_epochs"],
         device
     )
 
@@ -151,17 +116,18 @@ def train_cmd(train_conllu_path, val_conllu_path, serialization_dir, batch_size,
     vocab.serialize(vocab_path)
     model_path = os.path.join(serialization_dir, "model.bin")
     torch.save(model, model_path)
-
+    # Also serialize input configuration, so that we can describe the model.
+    shutil.copy(config, serialization_dir)
 
 def predict_cmd(
-    input_conllu_path,
-    output_conllu_path,
+    input_conllu_file,
+    output_conllu_file,
     serialization_dir,
     batch_size,
     device
 ):
     # Create test dataloader.
-    test_dataset = CobaldJointDataset(input_conllu_path)
+    test_dataset = CobaldJointDataset(input_conllu_file)
     g = torch.Generator()
     g.manual_seed(42)
     test_dataloader = DataLoader(
@@ -191,7 +157,7 @@ def predict_cmd(
     predictions: list[dict[str, str]] = [
         postprocess(**prediction) for prediction in predictions_str
     ]
-    with open(output_conllu_path, 'w') as file:
+    with open(output_conllu_file, 'w') as file:
         for prediction in predictions:
             file.write(prediction.serialize())
 
@@ -201,7 +167,7 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     parser = argparse.ArgumentParser(
-        description="A simple application for model training and prediction."
+        description="A simple application for model training and inference."
     )
 
     # Subparsers for mode-specific arguments
@@ -210,42 +176,35 @@ def main():
     # Train mode arguments
     train_parser = subparsers.add_parser("train", help="Arguments for training mode.")
     train_parser.add_argument(
-        "train_conllu_path",
+        "train_conllu_file",
         type=str,
-        help="Path to the training .conllu file."
+        help="Path to a training .conllu file."
     )
     train_parser.add_argument(
-        "val_conllu_path",
+        "val_conllu_file",
         type=str,
-        help="Path to the validation .conllu file."
+        help="Path to a validation .conllu file."
+    )
+    train_parser.add_argument(
+        "config_file",
+        type=str,
+        help="Path to a training configuration file."
     )
     train_parser.add_argument(
         "serialization_dir",
         type=str,
-        help="Path to model serialization directory. Must be empty."
-    )
-    train_parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=1,
-        help="Batch size for dataloaders."
-    )
-    train_parser.add_argument(
-        "--n_epochs",
-        type=int,
-        default=1,
-        help="Number of training epochs."
+        help="Path to a model serialization directory. Must be empty."
     )
 
     # Predict mode arguments
     predict_parser = subparsers.add_parser("predict", help="Arguments for prediction mode.")
     predict_parser.add_argument(
-        "input_conllu_path",
+        "input_conllu_file",
         type=str,
         help="Path to a conllu file to read unlabeled sentences from."
     )
     predict_parser.add_argument(
-        "output_conllu_path",
+        "output_conllu_file",
         type=str,
         help="Path to a conllu file to write predictions to."
     )
@@ -267,17 +226,16 @@ def main():
         # Create serialization directory and make sure it does not exist.
         os.makedirs(args.serialization_dir, exist_ok=False)
         train_cmd(
-            args.train_conllu_path,
-            args.val_conllu_path,
+            args.train_conllu_file,
+            args.val_conllu_file,
+            args.config_file,
             args.serialization_dir,
-            args.batch_size,
-            args.n_epochs,
             device
         )
     elif args.subparser_name == "predict":
         predict_cmd(
-            args.input_conllu_path,
-            args.output_conllu_path,
+            args.input_conllu_file,
+            args.output_conllu_file,
             args.serialization_dir,
             args.batch_size,
             device

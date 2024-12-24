@@ -1,0 +1,51 @@
+{
+    "model_args": {
+        "encoder_args": {
+            "model_name": "distilbert-base-uncased",
+            "train_parameters": true
+        },
+        "null_predictor_args": {
+            "hidden_size": 512,
+            "activation": "relu",
+            "dropout": 0.1,
+            "consecutive_null_limit": 2
+        },
+        "tagger_args": {
+            "lemma_rule_classifier_args": {
+                "hidden_size": 512,
+                "activation": "relu",
+                "dropout": 0.1
+            },
+            "pos_feats_classifier_args": {
+                "hidden_size": 512,
+                "activation": "relu",
+                "dropout": 0.1
+            },
+            "depencency_classifier_args": {
+                "hidden_size": 128,
+                "activation": "relu",
+                "dropout": 0.1
+            },
+            "misc_classifier_args": {
+                "hidden_size": 256,
+                "activation": "relu",
+                "dropout": 0.1
+            },
+            "deepslot_classifier_args": {
+                "hidden_size": 512,
+                "activation": "relu",
+                "dropout": 0.1
+            },
+            "semclass_classifier_args": {
+                "hidden_size": 512,
+                "activation": "relu",
+                "dropout": 0.1
+            }
+        }
+    },
+    "optimizer_args": {
+        "lr": 3e-4
+    },
+    "batch_size": 32,
+    "n_epochs": 10
+}

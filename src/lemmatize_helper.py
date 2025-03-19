@@ -2,15 +2,15 @@
 Based on https://github.com/DanAnastasyev/GramEval2020/blob/master/solution/train/lemmatize_helper.py
 """
 
-import attr
+from dataclasses import dataclass
 from difflib import SequenceMatcher
 
 
-@attr.s(frozen=True)
+@dataclass
 class LemmaRule:
-    cut_prefix = attr.ib(default=0)
-    cut_suffix = attr.ib(default=0)
-    append_suffix = attr.ib(default='')
+    cut_prefix: int = 0
+    cut_suffix: int = 0
+    append_suffix: str = ''
 
     @staticmethod
     def from_str(lemma_rule_str: str):
@@ -41,7 +41,7 @@ def construct_lemma_rule(word: str, lemma: str) -> str:
     """
     Predict lemmatization rule given word and its lemma.
     Example:
-    >>> build_lemma_rule("сек.", "секунда")
+    >>> construct_lemma_rule("сек.", "секунда")
     LemmaRule(cut_prefix=0, cut_suffix=1, append_suffix='унда')
     """
     word = normalize(word)

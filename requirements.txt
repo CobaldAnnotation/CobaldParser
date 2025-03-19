@@ -1,5 +1,4 @@
 torch==2.5.1
-conllu==4.5.3
 overrides==7.3.1
 attrs==23.1.0
 transformers==4.46.3

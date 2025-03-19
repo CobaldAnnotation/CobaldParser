@@ -1,7 +1,7 @@
 from torch import nn
 from torch import LongTensor
 
-from src.mlp_classifier import MLPClassifier
+from src.mlp_classifier import MlpClassifier
 from src.dependency_classifier import DependencyClassifier
 from src.encoder import MaskedLanguageModelEncoder
 from src.utils import build_padding_mask, build_null_mask
@@ -14,7 +14,7 @@ class MultiHeadTagger(nn.Module):
         self,
         encoder: MaskedLanguageModelEncoder,
         lemma_rule_classifier_args: dict,
-        pos_feats_classifier_args: dict,
+        joint_pos_feats_classifier_args: dict,
         depencency_classifier_args: dict,
         misc_classifier_args: dict,
         deepslot_classifier_args: dict,
@@ -26,41 +26,41 @@ class MultiHeadTagger(nn.Module):
         embedding_size = self.encoder.get_embedding_size()
 
         # Heads.
-        self.lemma_rule_classifier = MLPClassifier(
+        self.lemma_rule_classifier = MlpClassifier(
             input_size=embedding_size,
-            **lemma_rule_classifier_args
+            **lemma_rule_classifier_args,
         )
-        self.joint_pos_feats_classifier = MLPClassifier(
+        self.joint_pos_feats_classifier = MlpClassifier(
             input_size=embedding_size,
-            **pos_feats_classifier_args
+            **joint_pos_feats_classifier_args,
         )
         self.dependency_classifier = DependencyClassifier(
             input_size=embedding_size,
-            **depencency_classifier_args
+            **depencency_classifier_args,
         )
-        self.misc_classifier = MLPClassifier(
+        self.misc_classifier = MlpClassifier(
             input_size=embedding_size,
-            **misc_classifier_args
+            **misc_classifier_args,
         )
-        self.deepslot_classifier = MLPClassifier(
+        self.deepslot_classifier = MlpClassifier(
             input_size=embedding_size,
-            **deepslot_classifier_args
+            **deepslot_classifier_args,
         )
-        self.semclass_classifier = MLPClassifier(
+        self.semclass_classifier = MlpClassifier(
             input_size=embedding_size,
-            **semclass_classifier_args
+            **semclass_classifier_args,
         )
 
     def forward(
         self,
         words: list[list[str]],
-        lemma_rules: LongTensor = None,
-        joint_pos_feats: LongTensor = None,
-        deps_ud: LongTensor = None,
-        deps_eud: LongTensor = None,
-        miscs: LongTensor = None,
-        deepslots: LongTensor = None,
-        semclasses: LongTensor = None
+        lemma_rule_labels: LongTensor = None,
+        joint_pos_feats_labels: LongTensor = None,
+        deps_ud_labels: LongTensor = None,
+        deps_eud_labels: LongTensor = None,
+        misc_labels: LongTensor = None,
+        deepslot_labels: LongTensor = None,
+        semclass_labels: LongTensor = None,
     ) -> dict[str, any]:
 
         # [batch_size, seq_len, embedding_size]
@@ -69,19 +69,35 @@ class MultiHeadTagger(nn.Module):
         padding_mask = build_padding_mask(words, embeddings.device)
         null_mask = build_null_mask(words, embeddings.device)
 
-        lemma_out = self.lemma_rule_classifier(embeddings, lemma_rules, padding_mask)
-        joint_pos_feats_out = self.joint_pos_feats_classifier(embeddings, joint_pos_feats, padding_mask)
+        lemma_out = self.lemma_rule_classifier(
+            embeddings,
+            lemma_rule_labels,
+            padding_mask
+        )
+        joint_pos_feats_out = self.joint_pos_feats_classifier(
+            embeddings,
+            joint_pos_feats_labels,
+            padding_mask
+        )
         deps_out = self.dependency_classifier(
             embeddings,
-            deps_ud,
-            deps_eud,
+            deps_ud_labels,
+            deps_eud_labels,
             # Mask nulls for basic UD and don't mask for E-UD.
             mask_ud=(padding_mask & ~null_mask),
             mask_eud=padding_mask
         )
-        misc_out = self.misc_classifier(embeddings, miscs, padding_mask)
-        deepslot_out = self.deepslot_classifier(embeddings, deepslots, padding_mask)
-        semclass_out = self.semclass_classifier(embeddings, semclasses, padding_mask)
+        misc_out = self.misc_classifier(embeddings, misc_labels, padding_mask)
+        deepslot_out = self.deepslot_classifier(
+            embeddings,
+            deepslot_labels,
+            padding_mask
+        )
+        semclass_out = self.semclass_classifier(
+            embeddings,
+            semclass_labels,
+            padding_mask
+        )
 
         loss = lemma_out['loss'] \
             + joint_pos_feats_out['loss'] \
@@ -92,12 +108,12 @@ class MultiHeadTagger(nn.Module):
             + semclass_out['loss']
 
         return {
-            'lemma_rules': lemma_out['preds'],
-            'joint_pos_feats': joint_pos_feats_out['preds'],
-            'deps_ud': deps_out['preds_ud'],
-            'deps_eud': deps_out['preds_eud'],
-            'miscs': misc_out['preds'],
-            'deepslots': deepslot_out['preds'],
-            'semclasses': semclass_out['preds'],
+            'lemma_rule_preds': lemma_out['preds'],
+            'joint_pos_feats_preds': joint_pos_feats_out['preds'],
+            'deps_ud_preds': deps_out['preds_ud'],
+            'deps_eud_preds': deps_out['preds_eud'],
+            'misc_preds': misc_out['preds'],
+            'deepslot_preds': deepslot_out['preds'],
+            'semclass_preds': semclass_out['preds'],
             'loss': loss
         }

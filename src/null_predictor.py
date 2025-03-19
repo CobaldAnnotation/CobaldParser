@@ -2,13 +2,16 @@ import torch
 from torch import nn
 from torch import Tensor
 
-from src.mlp_classifier import MLPClassifier
+from src.mlp_classifier import MlpClassifier
 from src.encoder import MaskedLanguageModelEncoder
 from src.utils import build_padding_mask, pad_sequences
 
 
 class NullPredictor(nn.Module):
-    """A pipeline to restore ellipted tokens."""
+    """
+    A pipeline that restores ellipted tokens.
+    """
+
     def __init__(
         self,
         encoder: MaskedLanguageModelEncoder,
@@ -16,12 +19,11 @@ class NullPredictor(nn.Module):
         activation: str,
         dropout: float,
         consecutive_null_limit: int,
-        class_weights: list[float] = None
+        class_weights: list[float] = None,
     ):
         super().__init__()
-
         self.encoder = encoder
-        self.null_classifier = MLPClassifier(
+        self.null_classifier = MlpClassifier(
             input_size=self.encoder.get_embedding_size(),
             hidden_size=hidden_size,
             n_classes=consecutive_null_limit + 1,

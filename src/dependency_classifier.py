@@ -8,10 +8,10 @@ from torch import nn
 from torch import Tensor, BoolTensor, LongTensor
 import torch.nn.functional as F
 
-from src.mlp_classifier import ACT2FN
+from src.activations import get_activation_fn
 from src.bilinear_matrix_attention import BilinearMatrixAttention
 from src.chu_liu_edmonds import decode_mst
-from src.utils import pairwise_mask, replace_masked_values
+from src.utils import pairwise_mask, replace_masked_values, IGNORE_INDEX
 
 
 class DependencyHeadBase(nn.Module):
@@ -76,8 +76,6 @@ class DependencyHeadBase(nn.Module):
             'loss': loss
         }
 
-    ### Abstract (virtual) methods ###
-
     def predict_arcs(
         self,
         s_arc: Tensor,   # [batch_size, seq_len, seq_len]
@@ -116,7 +114,9 @@ class DependencyHead(DependencyHeadBase):
             pred_arcs_seq = s_arc.argmax(dim=-1)
         else:
             # During inference, diligently decode Maximum Spanning Tree.
-            pred_arcs_seq = self._mst_decode(s_arc, mask)
+            # FIXME
+            # pred_arcs_seq = self._mst_decode(s_arc, mask)
+            pred_arcs_seq = s_arc.argmax(dim=-1)
 
         # Upscale arcs sequence of shape [batch_size, seq_len]
         # to matrix of shape [batch_size, seq_len, seq_len].
@@ -132,7 +132,7 @@ class DependencyHead(DependencyHeadBase):
     ) -> tuple[Tensor, Tensor]:
 
         batch_size = s_arc.size(0)
-        device = s_arc.get_device()
+        device = s_arc.device
         s_arc = s_arc.cpu()
 
         # Convert scores to probabilities, as `decode_mst` expects non-negative values.
@@ -236,14 +236,14 @@ class DependencyClassifier(nn.Module):
         n_rels_ud: int,
         n_rels_eud: int,
         activation: str,
-        dropout: float
+        dropout: float,
     ):
         super().__init__()
 
         self.arc_dep_mlp = nn.Sequential(
             nn.Dropout(dropout),
             nn.Linear(input_size, hidden_size),
-            ACT2FN[activation],
+            get_activation_fn(activation),
             nn.Dropout(dropout)
         )
         # All mlps are equal.
@@ -275,7 +275,7 @@ class DependencyClassifier(nn.Module):
             h_arc_dep,
             h_rel_head,
             h_rel_dep,
-            gold_arcs=(gold_ud != -1), # Absent arcs have value of -1.
+            gold_arcs=(gold_ud != IGNORE_INDEX), # Absent arcs have value of IGNORE_INDEX.
             gold_rels=gold_ud,
             mask=mask_ud
         )
@@ -284,7 +284,7 @@ class DependencyClassifier(nn.Module):
             h_arc_dep,
             h_rel_head,
             h_rel_dep,
-            gold_arcs=(gold_eud != -1), # Absent arcs have value of -1.
+            gold_arcs=(gold_eud != IGNORE_INDEX),
             gold_rels=gold_eud,
             mask=mask_eud
         )

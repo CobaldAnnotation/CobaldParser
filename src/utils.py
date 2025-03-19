@@ -2,6 +2,10 @@ import torch
 from torch import Tensor
 
 
+# A default ignore_index for PyTorch cross-entropy loss.
+IGNORE_INDEX = -100
+
+
 def recursive_find_unique(data) -> set:
     """
     Recursively find all unique elements in a list or nested lists.

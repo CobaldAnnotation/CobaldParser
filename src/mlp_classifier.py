@@ -2,18 +2,10 @@ import torch
 from torch import nn
 from torch import Tensor, BoolTensor, LongTensor
 
-import torch.nn.functional as F
+from src.activations import get_activation_fn
 
 
-ACT2FN = {
-    "relu": nn.ReLU(),
-    "leaky_relu": nn.LeakyReLU,
-    "sigmoid": nn.Sigmoid(),
-    "tanh": nn.Tanh()
-}
-
-
-class MLPClassifier(nn.Module):
+class MlpClassifier(nn.Module):
     """ Simple feed-forward multilayer perceptron classifier. """
 
     def __init__(
@@ -23,19 +15,19 @@ class MLPClassifier(nn.Module):
         n_classes: int,
         activation: str,
         dropout: float,
-        class_weights: list[float] = None
+        class_weights: list[float] = None,
     ):
         super().__init__()
 
         self.classifier = nn.Sequential(
             nn.Dropout(dropout),
             nn.Linear(input_size, hidden_size),
-            ACT2FN[activation],
+            get_activation_fn(activation),
             nn.Dropout(dropout),
             nn.Linear(hidden_size, n_classes)
         )
-        class_weights = Tensor(class_weights) if class_weights is not None else None
-        self.loss_fn = nn.CrossEntropyLoss(weight=class_weights)
+        class_weights_pt = torch.tensor(class_weights) if class_weights is not None else None
+        self.loss_fn = nn.CrossEntropyLoss(weight=class_weights_pt)
 
     def forward(
         self,

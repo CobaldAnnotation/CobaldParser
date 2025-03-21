@@ -1,4 +1,4 @@
-from overrides import override
+from typing import override
 from copy import deepcopy
 
 import numpy as np

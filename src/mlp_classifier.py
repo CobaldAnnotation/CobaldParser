@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from torch import Tensor, BoolTensor, LongTensor
+from torch import Tensor, LongTensor
 
 from src.activations import get_activation_fn
 
@@ -19,6 +19,7 @@ class MlpClassifier(nn.Module):
     ):
         super().__init__()
 
+        self.n_classes = n_classes
         self.classifier = nn.Sequential(
             nn.Dropout(dropout),
             nn.Linear(input_size, hidden_size),
@@ -26,24 +27,20 @@ class MlpClassifier(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(hidden_size, n_classes)
         )
-        class_weights_pt = torch.tensor(class_weights) if class_weights is not None else None
-        self.loss_fn = nn.CrossEntropyLoss(weight=class_weights_pt)
+        if class_weights is not None:
+            class_weights = torch.tensor(class_weights)
+        self.cross_entropy = nn.CrossEntropyLoss(weight=class_weights)
 
-    def forward(
-        self,
-        embeddings: Tensor,
-        labels: LongTensor = None,
-        mask: BoolTensor = None
-    ) -> dict[str, Tensor]:
-
+    def forward(self, embeddings: Tensor, labels: LongTensor = None) -> dict:
         logits = self.classifier(embeddings)
-
         # Calculate loss.
         loss = torch.tensor(0.)
         if labels is not None:
-            loss = self.loss_fn(logits[mask], labels[mask])
-
+            # Reshape tensors to match expected dimensions
+            loss = self.cross_entropy(
+                logits.view(-1, self.n_classes),
+                labels.view(-1)
+            )
         # Predictions.
         preds = logits.argmax(dim=-1)
-
         return {'preds': preds, 'loss': loss}

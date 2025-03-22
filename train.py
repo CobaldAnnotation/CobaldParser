@@ -1,38 +1,37 @@
-import os
 from datasets import load_dataset
 from transformers import (
     HfArgumentParser,
     TrainingArguments,
-    Trainer,
-    set_seed
+    Trainer
 )
 from src.processing import preprocess, collate_with_ignore_index
 from src.parser import MorphoSyntaxSemanticsParserConfig, MorphoSyntaxSemanticsParser
 
+# FIXME
+import importlib
+import transformers
+importlib.reload(transformers)
 
 # TODO
 def compute_metrics(eval_pred, compute_result: bool):
     preds, labels = eval_pred
     print(f"compute_metrics is called")
-    print(preds)
-    print(labels)
-    # print(f"logits: {len(preds)} items: {list(logit.shape for logit in logits)}")
-    # print(f"labels: {len(labels)} items: {list(label.shape for label in labels)}")
+    # print(preds)
+    # print(labels)
+    print(f"preds: {len(preds)} items: {list(pred.shape for pred in preds)}")
+    print(f"labels: {len(labels)} items: {list(label.shape for label in labels)}")
     return {"eval_loss": 0.0}
 
 
 def train(training_args: TrainingArguments, model_config_path: str):
-    # Reproducibility.
-    # I must have this environment variable set in order to enable CUDA determinism.
-    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
-    set_seed(51, deterministic=True)
-
-    dataset = load_dataset("CoBaLD/enhanced-cobald-dataset", name="en")
+    dataset = load_dataset("CoBaLD/enhanced-cobald-dataset", name="en", trust_remote_code=True)
+    dataset.cleanup_cache_files()
     train_dataset = dataset['train']
     train_dataset = preprocess(train_dataset)
 
     # FIXME
-    val_dataset = load_dataset("CoBaLD/enhanced-cobald-dataset", name="en")['train']
+    val_dataset = load_dataset("CoBaLD/enhanced-cobald-dataset", name="en", trust_remote_code=True)['train']
+    val_dataset.cleanup_cache_files()
     val_dataset = preprocess(val_dataset)
 
     # Create model.
@@ -41,13 +40,14 @@ def train(training_args: TrainingArguments, model_config_path: str):
     get_matrix_column_size = lambda column: train_dataset.features[column].feature.feature.num_classes
     # Do not list number of classes in configuration file.
     # Instead, automatically fill them at runtime for convenience.
-    model_config.tagger_args["lemma_rule_classifier_args"]["n_classes"] = get_column_size("lemma_rule_labels")
-    model_config.tagger_args["joint_pos_feats_classifier_args"]["n_classes"] = get_column_size("joint_pos_feats_labels")
-    model_config.tagger_args["depencency_classifier_args"]["n_rels_ud"] = get_matrix_column_size("deps_ud_labels")
-    model_config.tagger_args["depencency_classifier_args"]["n_rels_eud"] = get_matrix_column_size("deps_eud_labels")
-    model_config.tagger_args["misc_classifier_args"]["n_classes"] = get_column_size("misc_labels")
-    model_config.tagger_args["deepslot_classifier_args"]["n_classes"] = get_column_size("deepslot_labels")
-    model_config.tagger_args["semclass_classifier_args"]["n_classes"] = get_column_size("semclass_labels")
+    model_config.tagger_args["lemma_rule_classifier_args"]["n_classes"] = get_column_size("lemma_rules")
+    model_config.tagger_args["morph_feats_classifier_args"]["n_classes"] = get_column_size("morph_feats")
+    model_config.tagger_args["depencency_classifier_args"]["n_rels_ud"] = get_matrix_column_size("syntax_ud")
+    model_config.tagger_args["depencency_classifier_args"]["n_rels_eud"] = get_matrix_column_size("syntax_eud")
+    model_config.tagger_args["misc_classifier_args"]["n_classes"] = get_column_size("miscs")
+    model_config.tagger_args["deepslot_classifier_args"]["n_classes"] = get_column_size("deepslots")
+    model_config.tagger_args["semclass_classifier_args"]["n_classes"] = get_column_size("semclasses")
+    model_config.null_predictor_args["consecutive_null_limit"] = get_column_size("counting_mask")
     model = MorphoSyntaxSemanticsParser(model_config)
 
     trainer = Trainer(
@@ -58,7 +58,7 @@ def train(training_args: TrainingArguments, model_config_path: str):
         data_collator=collate_with_ignore_index,
         compute_metrics=compute_metrics,
     )
-    trainer.train()
+    trainer.train(ignore_keys_for_eval=['words', 'sent_id', 'text'])
 
 
 if __name__ == "__main__":

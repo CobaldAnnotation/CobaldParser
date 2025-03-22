@@ -5,45 +5,37 @@
   },
   "null_predictor_args": {
     "hidden_size": 512,
-    "consecutive_null_limit": 2,
     "activation": "relu",
     "dropout": 0.1
   },
   "tagger_args": {
-    "deepslot_classifier_args": {
-      "hidden_size": 256,
-      "n_classes": 100,
+    "lemma_rule_classifier_args": {
+      "hidden_size": 512,
+      "activation": "relu",
+      "dropout": 0.1
+    },
+    "morph_feats_classifier_args": {
+      "hidden_size": 512,
       "activation": "relu",
       "dropout": 0.1
     },
     "depencency_classifier_args": {
       "hidden_size": 128,
-      "n_rels_eud": 100,
-      "n_rels_ud": 100,
-      "activation": "relu",
-      "dropout": 0.1
-    },
-    "joint_pos_feats_classifier_args": {
-      "hidden_size": 512,
-      "n_classes": 100,
-      "activation": "relu",
-      "dropout": 0.1
-    },
-    "lemma_rule_classifier_args": {
-      "hidden_size": 512,
-      "n_classes": 100,
       "activation": "relu",
       "dropout": 0.1
     },
     "misc_classifier_args": {
       "hidden_size": 512,
-      "n_classes": 100,
+      "activation": "relu",
+      "dropout": 0.1
+    },
+    "deepslot_classifier_args": {
+      "hidden_size": 256,
       "activation": "relu",
       "dropout": 0.1
     },
     "semclass_classifier_args": {
       "hidden_size": 512,
-      "n_classes": 100,
       "activation": "relu",
       "dropout": 0.1
     }

@@ -46,24 +46,20 @@ class MorphoSyntaxSemanticsParser(PreTrainedModel):
     def forward(
         self,
         words: list[list[str]],
-        lemma_rule_labels: LongTensor = None,
-        joint_pos_feats_labels: LongTensor = None,
-        deps_ud_labels: LongTensor = None,
-        deps_eud_labels: LongTensor = None,
-        misc_labels: LongTensor = None,
-        deepslot_labels: LongTensor = None,
-        semclass_labels: LongTensor = None,
+        lemma_rules: LongTensor = None,
+        morph_feats: LongTensor = None,
+        syntax_ud: LongTensor = None,
+        syntax_eud: LongTensor = None,
+        miscs: LongTensor = None,
+        deepslots: LongTensor = None,
+        semclasses: LongTensor = None,
+        counting_mask: LongTensor = None,
         sent_id: str = None,
         text: str = None
     ) -> dict[str, any]:
 
-        # If no labels for any of three tiers are provided, we are at inference.
-        has_labels = lemma_rule_labels is not None or joint_pos_feats_labels is not None \
-            or deps_ud_labels is not None or deps_eud_labels is not None or misc_labels is not None \
-            or deepslot_labels is not None or semclass_labels is not None
-
         # Restore nulls.
-        null_out = self.null_predictor(words, is_inference=(not has_labels))
+        null_out = self.null_predictor(words, counting_mask)
         # Words with predicted nulls.
         words_with_nulls = null_out['words']
 
@@ -71,19 +67,19 @@ class MorphoSyntaxSemanticsParser(PreTrainedModel):
         # to the tagger, so that the latter is trained upon correct sentences.
         # Moreover, we cannot calculate loss on predicted nulls, as they have no labels,
         # so the same strategy is used for validation as well.
-        if has_labels:
+        if counting_mask is not None:
             words_with_nulls = words
 
         # Predict morphological, syntactic and semantic tags.
         tagger_out = self.tagger(
             words_with_nulls,
-            lemma_rule_labels,
-            joint_pos_feats_labels,
-            deps_ud_labels,
-            deps_eud_labels,
-            misc_labels,
-            deepslot_labels,
-            semclass_labels
+            lemma_rules,
+            morph_feats,
+            syntax_ud,
+            syntax_eud,
+            miscs,
+            deepslots,
+            semclasses
         )
 
         # Add up null predictor and tagger losses.
@@ -92,7 +88,7 @@ class MorphoSyntaxSemanticsParser(PreTrainedModel):
         return {
             'words': null_out['words'],
             'lemma_rule_preds': tagger_out['lemma_rule_preds'],
-            'joint_pos_feats_preds': tagger_out['joint_pos_feats_preds'],
+            'morph_feats_preds': tagger_out['morph_feats_preds'],
             'deps_ud_preds': tagger_out['deps_ud_preds'],
             'deps_eud_preds': tagger_out['deps_eud_preds'],
             'misc_preds': tagger_out['misc_preds'],

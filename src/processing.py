@@ -2,7 +2,6 @@ import json
 import itertools
 from datasets import Dataset, Features, Sequence, Value, ClassLabel
 
-from torch import Tensor
 import numpy as np
 
 from src.lemmatize_helper import construct_lemma_rule, reconstruct_lemma
@@ -28,6 +27,23 @@ def remove_range_tokens(sentence: dict) -> dict:
         for key, values in sentence.items()
         if values is not None and isinstance(values, list)
     }
+
+
+def build_counting_mask(words: list[str]) -> np.array:
+    """
+    Count the number of nulls following each non-null token for a bunch of sentences.
+    `counting_mask[i] = N` means i-th non-null token is followed by N nulls.
+    
+    FIXME: move to tests
+    >>> words = ["#NULL", 'Quick', "#NULL", "#NULL", 'brown', 'fox', "#NULL"]
+    >>> build_counting_mask(words)
+    array([1, 2, 0, 1])
+    """
+    # -1 accounts for leading nulls and len(words) accounts for the trailing nulls.
+    nonnull_words_idxs = [-1] + [i for i, word in enumerate(words) if word != NULL] + [len(words)]
+    nonnull_words_idxs = np.array(nonnull_words_idxs)
+    counting_mask = np.diff(nonnull_words_idxs) - 1
+    return counting_mask
 
 
 def renumerate_syntax(ids: list[str], sentence_deps: list[dict]) -> list[dict]:
@@ -80,23 +96,6 @@ def build_syntax_matrix(sentence_deps: list[dict]) -> list[list]:
     return syntax_matrix
 
 
-def build_counting_mask(words: list[str]) -> np.array:
-    """
-    Count the number of nulls following each non-null token for a bunch of sentences.
-    `counting_mask[i] = N` means i-th non-null token is followed by N nulls.
-    
-    FIXME: move to tests
-    >>> words = ["#NULL", 'Quick', "#NULL", "#NULL", 'brown', 'fox', "#NULL"]
-    >>> build_counting_mask(words)
-    array([1, 2, 0, 1])
-    """
-    # -1 accounts for leading nulls and len(words) accounts for the trailing nulls.
-    nonnull_words_idxs = [-1] + [i for i, word in enumerate(words) if word != NULL] + [len(words)]
-    nonnull_words_idxs = np.array(nonnull_words_idxs)
-    counting_mask = np.diff(nonnull_words_idxs) - 1
-    return counting_mask
-
-
 def transform_fields(sentence: dict) -> dict:
     """
     Transform sentence fields:
@@ -105,6 +104,8 @@ def transform_fields(sentence: dict) -> dict:
      * encode ud syntax into a single 2d matrix,
      * same for e-ud syntax.
     """
+
+    counting_mask = build_counting_mask(sentence["words"])
 
     lemma_rules = [
         construct_lemma_rule(word, lemma) if lemma is not None else None
@@ -129,14 +130,12 @@ def transform_fields(sentence: dict) -> dict:
     syntax_matrix_ud = build_syntax_matrix(new_deps_ud)
     syntax_matrix_eud = build_syntax_matrix(new_deps_eud)
 
-    counting_mask = build_counting_mask(sentence["words"])
-
     return {
+        "counting_mask": counting_mask,
         "lemma_rules": lemma_rules,
         "morph_feats": morph_feats,
         "syntax_ud": syntax_matrix_ud,
-        "syntax_eud": syntax_matrix_eud,
-        "counting_mask": counting_mask
+        "syntax_eud": syntax_matrix_eud
     }
 
 
@@ -161,6 +160,7 @@ def extract_unique_labels(dataset, column_name, is_matrix = False) -> list[str]:
 def update_schema_with_class_labels(dataset: Dataset) -> Features:
     """Update the schema to use ClassLabel for specified columns."""
 
+    max_null_count = max(itertools.chain.from_iterable(dataset["counting_mask"]))
     # Extract unique labels for each column that needs to be ClassLabel.
     lemma_rule_tagset = extract_unique_labels(dataset, "lemma_rules")
     morph_feats_tagset = extract_unique_labels(dataset, "morph_feats")
@@ -169,11 +169,11 @@ def update_schema_with_class_labels(dataset: Dataset) -> Features:
     misc_tagset = extract_unique_labels(dataset, "miscs")
     deepslot_tagset = extract_unique_labels(dataset, "deepslots")
     semclass_tagset = extract_unique_labels(dataset, "semclasses")
-    max_null_count = max(itertools.chain.from_iterable(dataset["counting_mask"]))
 
     # Define updated features schema
     features = Features({
         "words": Sequence(Value("string")),
+        "counting_mask": Sequence(ClassLabel(num_classes=max_null_count + 1)),
         "lemma_rules": Sequence(ClassLabel(names=lemma_rule_tagset)),
         "morph_feats": Sequence(ClassLabel(names=morph_feats_tagset)),
         "syntax_ud": Sequence(Sequence(ClassLabel(names=ud_deprels_tagset))),
@@ -181,7 +181,6 @@ def update_schema_with_class_labels(dataset: Dataset) -> Features:
         "miscs": Sequence(ClassLabel(names=misc_tagset)),
         "deepslots": Sequence(ClassLabel(names=deepslot_tagset)),
         "semclasses": Sequence(ClassLabel(names=semclass_tagset)),
-        "counting_mask": Sequence(ClassLabel(num_classes=max_null_count + 1)),
         "sent_id": Value("string"),
         "text": Value("string")
     })
@@ -247,6 +246,7 @@ def collate_with_ignore_index(batches: list[dict]) -> dict:
     def return_non_empty(labels):
         return labels if labels.max() != IGNORE_INDEX else None
 
+    counting_masks_batched = pad_sequence_column('counting_mask')
     lemma_rules_batched = pad_sequence_column('lemma_rules')
     morph_feats_batched = pad_sequence_column('morph_feats')
     syntax_ud_batched = pad_matrix_column('syntax_ud')
@@ -254,10 +254,10 @@ def collate_with_ignore_index(batches: list[dict]) -> dict:
     miscs_batched = pad_sequence_column('miscs')
     deepslots_batched = pad_sequence_column('deepslots')
     semclasses_batched = pad_sequence_column('semclasses')
-    counting_masks_batched = pad_sequence_column('counting_mask')
 
     return {
         "words": stack_list_column('words'),
+        "counting_mask": return_non_empty(counting_masks_batched),
         "lemma_rules": return_non_empty(lemma_rules_batched),
         "morph_feats": return_non_empty(morph_feats_batched),
         "syntax_ud": return_non_empty(syntax_ud_batched),
@@ -265,7 +265,6 @@ def collate_with_ignore_index(batches: list[dict]) -> dict:
         "miscs": return_non_empty(miscs_batched),
         "deepslots": return_non_empty(deepslots_batched),
         "semclasses": return_non_empty(semclasses_batched),
-        "counting_mask": return_non_empty(counting_masks_batched),
         "sent_id": stack_list_column('sent_id'),
         "text": stack_list_column('text')
     }

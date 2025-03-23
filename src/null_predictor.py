@@ -33,7 +33,7 @@ class NullPredictor(nn.Module):
     def forward(
         self,
         words: list[list[str]],
-        counting_mask: Tensor = None
+        counting_mask_gold: Tensor = None
     ) -> dict[str, any]:
         
         # Extra [CLS] token accounts for the case when #NULL is the first token in a sentence.
@@ -43,12 +43,12 @@ class NullPredictor(nn.Module):
         embeddings_without_nulls = self.encoder(words_without_nulls)
 
         # Predict counting mask.
-        classifier_output = self.null_classifier(embeddings_without_nulls, counting_mask)
-        pred_counting_mask = classifier_output["preds"]
+        output = self.null_classifier(embeddings_without_nulls, counting_mask_gold)
 
-        # Add predicted nulls to the original sentences.
-        words_with_nulls = self._add_nulls(words, pred_counting_mask)
-        return {"words": words_with_nulls, "loss": classifier_output["loss"]}
+        # Restore predicted nulls in the original sentences.
+        output["words_with_nulls"] = self._add_nulls(words, output["preds"])
+
+        return output
 
     @staticmethod
     def _prepend_cls(sentences: list[list[str]]) -> list[list[str]]:

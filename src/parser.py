@@ -21,7 +21,7 @@ class MorphoSyntaxSemanticsParserConfig(PretrainedConfig):
         # that doesn't work without explicitly overriding the to_dict/from_dict methods
         # to properly reinstantiate nested configuration objects from their
         # dict representations.
-        # That's why we гыу dicts instead of sub-configs here.
+        # That's why we use dicts instead of sub-configs here.
         self.encoder_args = encoder_args
         self.null_predictor_args = null_predictor_args
         self.tagger_args = tagger_args
@@ -46,6 +46,7 @@ class MorphoSyntaxSemanticsParser(PreTrainedModel):
     def forward(
         self,
         words: list[list[str]],
+        counting_mask: LongTensor = None,
         lemma_rules: LongTensor = None,
         morph_feats: LongTensor = None,
         syntax_ud: LongTensor = None,
@@ -53,25 +54,22 @@ class MorphoSyntaxSemanticsParser(PreTrainedModel):
         miscs: LongTensor = None,
         deepslots: LongTensor = None,
         semclasses: LongTensor = None,
-        counting_mask: LongTensor = None,
         sent_id: str = None,
         text: str = None
     ) -> dict[str, any]:
 
         # Restore nulls.
-        null_out = self.null_predictor(words, counting_mask)
-        # Words with predicted nulls.
-        words_with_nulls = null_out['words']
+        null_output = self.null_predictor(words, counting_mask)
 
         # Teacher forcing: during training, pass the original words (with gold nulls)
         # to the tagger, so that the latter is trained upon correct sentences.
-        # Moreover, we cannot calculate loss on predicted nulls, as they have no labels,
-        # so the same strategy is used for validation as well.
-        if counting_mask is not None:
+        if self.training:
             words_with_nulls = words
+        else:
+            words_with_nulls = null_output['words_with_nulls']
 
         # Predict morphological, syntactic and semantic tags.
-        tagger_out = self.tagger(
+        tagger_output = self.tagger(
             words_with_nulls,
             lemma_rules,
             morph_feats,
@@ -83,18 +81,17 @@ class MorphoSyntaxSemanticsParser(PreTrainedModel):
         )
 
         # Add up null predictor and tagger losses.
-        loss = null_out['loss'] + tagger_out['loss']
+        loss = null_output['loss'] + tagger_output['loss']
 
         return {
-            'words': null_out['words'],
-            'lemma_rule_preds': tagger_out['lemma_rule_preds'],
-            'morph_feats_preds': tagger_out['morph_feats_preds'],
-            'deps_ud_preds': tagger_out['deps_ud_preds'],
-            'deps_eud_preds': tagger_out['deps_eud_preds'],
-            'misc_preds': tagger_out['misc_preds'],
-            'deepslot_preds': tagger_out['deepslot_preds'],
-            'semclass_preds': tagger_out['semclass_preds'],
-            'loss': loss,
-            'sent_id': sent_id,
-            'text': text
+            'words_with_nulls': null_output['words_with_nulls'],
+            'counting_mask': null_output['counting_mask'],
+            'lemma_rule_preds': tagger_output['lemma_rule_preds'],
+            'morph_feats_preds': tagger_output['morph_feats_preds'],
+            'deps_ud_preds': tagger_output['deps_ud_preds'],
+            'deps_eud_preds': tagger_output['deps_eud_preds'],
+            'misc_preds': tagger_output['misc_preds'],
+            'deepslot_preds': tagger_output['deepslot_preds'],
+            'semclass_preds': tagger_output['semclass_preds'],
+            'loss': loss
         }

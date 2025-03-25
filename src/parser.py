@@ -55,18 +55,19 @@ class MorphoSyntaxSemanticsParser(PreTrainedModel):
         deepslots: LongTensor = None,
         semclasses: LongTensor = None,
         sent_id: str = None,
-        text: str = None
+        text: str = None,
+        inference_mode: bool = False
     ) -> dict[str, any]:
-
+        
         # Restore nulls.
         null_output = self.null_predictor(words, counting_mask)
 
-        # Teacher forcing: during training, pass the original words (with gold nulls)
+        # "Teacher forcing": during training, pass the original words (with gold nulls)
         # to the tagger, so that the latter is trained upon correct sentences.
-        if self.training:
-            words_with_nulls = words
-        else:
+        if inference_mode:
             words_with_nulls = null_output['words_with_nulls']
+        else:
+            words_with_nulls = words
 
         # Predict morphological, syntactic and semantic tags.
         tagger_output = self.tagger(

@@ -1,3 +1,5 @@
+from copy import deepcopy # TODO: delete
+
 from datasets import load_dataset
 from transformers import (
     HfArgumentParser,
@@ -24,30 +26,30 @@ def compute_metrics(eval_pred, compute_result: bool):
 
 
 def train(training_args: TrainingArguments, model_config_path: str):
-    dataset = load_dataset("CoBaLD/enhanced-cobald-dataset", name="en", trust_remote_code=True)
-    dataset.cleanup_cache_files()
-    train_dataset = dataset['train']
-    train_dataset = preprocess(train_dataset)
-
     # FIXME
     val_dataset = load_dataset("CoBaLD/enhanced-cobald-dataset", name="en", trust_remote_code=True)['train']
-    val_dataset.cleanup_cache_files()
+    # val_dataset.cleanup_cache_files()
     val_dataset = preprocess(val_dataset)
 
-    # Create model.
+    # dataset = load_dataset("CoBaLD/enhanced-cobald-dataset", name="en", trust_remote_code=True)
+    # dataset.cleanup_cache_files()
+    train_dataset = deepcopy(val_dataset)
+    # train_dataset = preprocess(train_dataset)
+
+    # Load and autocomplete model config.
     model_config = MorphoSyntaxSemanticsParserConfig.from_json_file(model_config_path)
-    get_column_size = lambda column: train_dataset.features[column].feature.num_classes
-    get_matrix_column_size = lambda column: train_dataset.features[column].feature.feature.num_classes
     # Do not list number of classes in configuration file.
     # Instead, automatically fill them at runtime for convenience.
+    get_column_size = lambda column: train_dataset.features[column].feature.num_classes
     model_config.tagger_args["lemma_rule_classifier_args"]["n_classes"] = get_column_size("lemma_rules")
     model_config.tagger_args["morph_feats_classifier_args"]["n_classes"] = get_column_size("morph_feats")
-    model_config.tagger_args["depencency_classifier_args"]["n_rels_ud"] = get_matrix_column_size("syntax_ud")
-    model_config.tagger_args["depencency_classifier_args"]["n_rels_eud"] = get_matrix_column_size("syntax_eud")
+    model_config.tagger_args["depencency_classifier_args"]["n_rels_ud"] = get_column_size("ud_deprels")
+    model_config.tagger_args["depencency_classifier_args"]["n_rels_eud"] = get_column_size("eud_deprels")
     model_config.tagger_args["misc_classifier_args"]["n_classes"] = get_column_size("miscs")
     model_config.tagger_args["deepslot_classifier_args"]["n_classes"] = get_column_size("deepslots")
     model_config.tagger_args["semclass_classifier_args"]["n_classes"] = get_column_size("semclasses")
     model_config.null_predictor_args["consecutive_null_limit"] = get_column_size("counting_mask")
+    # Create model.
     model = MorphoSyntaxSemanticsParser(model_config)
 
     trainer = Trainer(
@@ -58,7 +60,7 @@ def train(training_args: TrainingArguments, model_config_path: str):
         data_collator=collate_with_ignore_index,
         compute_metrics=compute_metrics,
     )
-    trainer.train(ignore_keys_for_eval=['words', 'sent_id', 'text'])
+    trainer.train(ignore_keys_for_eval=['words_with_nulls', 'sent_id', 'text'])
 
 
 if __name__ == "__main__":

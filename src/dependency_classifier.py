@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from src.activations import get_activation_fn
 from src.bilinear_matrix_attention import BilinearMatrixAttention
 from src.chu_liu_edmonds import decode_mst
-from src.utils import pairwise_mask, replace_masked_values, IGNORE_INDEX
+from src.utils import pairwise_mask, replace_masked_values
 
 
 class DependencyHeadBase(nn.Module):
@@ -41,8 +41,7 @@ class DependencyHeadBase(nn.Module):
         h_arc_dep: Tensor,     # ...
         h_rel_head: Tensor,    # ...
         h_rel_dep: Tensor,     # ...
-        gold_arcs: BoolTensor, # [batch_size, seq_len, seq_len]
-        gold_rels: LongTensor, # [batch_size, seq_len, seq_len]
+        gold_arcs: LongTensor, # [batch_size, seq_len, seq_len]
         mask: BoolTensor       # [batch_size, seq_len]
     ) -> dict[str, Tensor]:
 
@@ -51,14 +50,14 @@ class DependencyHeadBase(nn.Module):
         s_arc = self.arc_attention(h_arc_head, h_arc_dep)
         # Mask undesirable values (padding, nulls, etc.) with -inf.
         replace_masked_values(s_arc, pairwise_mask(mask), replace_with=-1e8)
-        # Score arc relations.
-        # - [batch_size, seq_len, seq_len, num_labels]
+        # Score arcs' relations.
+        # [batch_size, seq_len, seq_len, num_labels]
         s_rel = self.rel_attention(h_rel_head, h_rel_dep).permute(0, 2, 3, 1)
 
         # Calculate loss.
         loss = torch.tensor(0.)
-        if gold_arcs is not None and gold_rels is not None:
-            arc_loss, rel_loss = self.calc_loss(s_arc, s_rel, gold_arcs, gold_rels, mask)
+        if gold_arcs is not None:
+            arc_loss, rel_loss = self.calc_loss(s_arc, s_rel, gold_arcs)
             # Aggregate both losses into one.
             loss = arc_loss + rel_loss
 
@@ -88,9 +87,7 @@ class DependencyHeadBase(nn.Module):
         self,
         s_arc: Tensor,         # [batch_size, seq_len, seq_len]
         s_rel: Tensor,         # [batch_size, seq_len, seq_len, num_labels]
-        gold_arcs: BoolTensor, # [batch_size, seq_len, seq_len]
-        gold_rels: LongTensor, # [batch_size, seq_len, seq_len]
-        mask: BoolTensor       # [batch_size, seq_len]
+        gold_arcs: LongTensor  # [n_arcs, 4]
     ) -> tuple[Tensor, Tensor]:
         """Calculate arc and relation loss."""
         raise NotImplementedError
@@ -114,15 +111,13 @@ class DependencyHead(DependencyHeadBase):
             pred_arcs_seq = s_arc.argmax(dim=-1)
         else:
             # During inference, diligently decode Maximum Spanning Tree.
+            pred_arcs_seq = self._mst_decode(s_arc, mask)
             # FIXME
-            # pred_arcs_seq = self._mst_decode(s_arc, mask)
-            pred_arcs_seq = s_arc.argmax(dim=-1)
+            # pred_arcs_seq = s_arc.argmax(dim=-1)
 
         # Upscale arcs sequence of shape [batch_size, seq_len]
         # to matrix of shape [batch_size, seq_len, seq_len].
         pred_arcs = F.one_hot(pred_arcs_seq, num_classes=pred_arcs_seq.size(1))
-        # Apply mask.
-        pred_arcs = pred_arcs * pairwise_mask(mask)
         return pred_arcs
 
     def _mst_decode(
@@ -172,19 +167,12 @@ class DependencyHead(DependencyHeadBase):
         self,
         s_arc: Tensor,         # [batch_size, seq_len, seq_len]
         s_rel: Tensor,         # [batch_size, seq_len, seq_len, num_labels]
-        gold_arcs: BoolTensor, # [batch_size, seq_len, seq_len]
-        gold_rels: LongTensor, # [batch_size, seq_len, seq_len]
-        mask: BoolTensor       # [batch_size, seq_len]
+        gold_arcs: LongTensor  # [n_arcs, 4]
     ) -> tuple[Tensor, Tensor]:
-        # Decompose gold matrix to gold heads and deprels.
-        # tensor.max returns tuple (values, indices).
-        # Values are gold relations, whereas indices are gold heads.
-        # Both of shape [batch_size, seq_len].
-        gold_deprels, gold_heads = gold_rels.max(dim=-1)
-        # Calculate arc loss for all arcs (except for padded).
-        arc_loss = F.cross_entropy(s_arc[mask], gold_heads[mask])
-        # Calculate relation loss only at gold arcs.
-        rel_loss = F.cross_entropy(s_rel[gold_arcs], gold_deprels[mask])
+        batch_idxs, arcs_from, arcs_to, rels = gold_arcs.T
+        # Calculate arc and rel loss for all present arcs.
+        arc_loss = F.cross_entropy(s_arc[batch_idxs, arcs_from], arcs_to)
+        rel_loss = F.cross_entropy(s_rel[batch_idxs, arcs_from, arcs_to], rels)
         return arc_loss, rel_loss
 
 
@@ -204,8 +192,6 @@ class MultiDependencyHead(DependencyHeadBase):
         arc_probs = torch.sigmoid(s_arc)
         # Find confident arcs (with prob > 0.5).
         pred_arcs = arc_probs.round().long()
-        # Apply mask.
-        pred_arcs = pred_arcs * pairwise_mask(mask)
         return pred_arcs
 
     @override
@@ -213,14 +199,15 @@ class MultiDependencyHead(DependencyHeadBase):
         self,
         s_arc: Tensor,         # [batch_size, seq_len, seq_len]
         s_rel: Tensor,         # [batch_size, seq_len, seq_len, num_labels]
-        gold_arcs: BoolTensor, # [batch_size, seq_len, seq_len]
-        gold_rels: LongTensor, # [batch_size, seq_len, seq_len]
-        mask: BoolTensor       # [batch_size, seq_len]
+        gold_arcs: LongTensor  # [n_arcs, 4]
     ) -> tuple[Tensor, Tensor]:
-
-        mask2d = pairwise_mask(mask)
-        arc_loss = F.binary_cross_entropy_with_logits(s_arc[mask2d], gold_arcs[mask2d].float())
-        rel_loss = F.cross_entropy(s_rel[gold_arcs], gold_rels[gold_arcs])
+        batch_idxs, arc_from, arc_to, rels = gold_arcs.T
+        # Gold arcs but as a matrix, where matrix[i, arcs_from, arc_to] = 1.0 if arcs is present.
+        gold_arcs_matrix = torch.zeros_like(s_arc)
+        gold_arcs_matrix[batch_idxs, arc_from, arc_to] = 1.0
+        # Padded arcs's logits are huge negative values that doesn't contribute to the loss.
+        arc_loss = F.binary_cross_entropy_with_logits(s_arc, gold_arcs_matrix)
+        rel_loss = F.cross_entropy(s_rel[batch_idxs, arc_from, arc_to], rels)
         return arc_loss, rel_loss
 
 
@@ -256,11 +243,11 @@ class DependencyClassifier(nn.Module):
 
     def forward(
         self,
-        embeddings: Tensor, # [batch_size, seq_len, embedding_size]
-        gold_ud: Tensor,    # [batch_size, seq_len, seq_len]
-        gold_eud: Tensor,   # [batch_size, seq_len, seq_len]
-        mask_ud: Tensor,    # [batch_size, seq_len]
-        mask_eud: Tensor    # [batch_size, seq_len]
+        embeddings: Tensor,    # [batch_size, seq_len, embedding_size]
+        gold_ud: Tensor,       # [n_ud_arcs, 4]
+        gold_eud: Tensor,      # [n_eud_arcs, 4]
+        mask_ud: Tensor,       # [batch_size, seq_len]
+        mask_eud: Tensor       # [batch_size, seq_len]
     ) -> dict[str, Tensor]:
 
         # - [batch_size, seq_len, hidden_size]
@@ -275,8 +262,7 @@ class DependencyClassifier(nn.Module):
             h_arc_dep,
             h_rel_head,
             h_rel_dep,
-            gold_arcs=(gold_ud != IGNORE_INDEX), # Absent arcs have value of IGNORE_INDEX.
-            gold_rels=gold_ud,
+            gold_arcs=gold_ud,
             mask=mask_ud
         )
         output_eud = self.dependency_head_eud(
@@ -284,8 +270,7 @@ class DependencyClassifier(nn.Module):
             h_arc_dep,
             h_rel_head,
             h_rel_dep,
-            gold_arcs=(gold_eud != IGNORE_INDEX),
-            gold_rels=gold_eud,
+            gold_arcs=gold_eud,
             mask=mask_eud
         )
 

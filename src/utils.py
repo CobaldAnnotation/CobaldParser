@@ -44,24 +44,6 @@ def pad_sequences(sequences: list[Tensor], padding_value: int) -> Tensor:
     """
     return torch.nn.utils.rnn.pad_sequence(sequences, padding_value=padding_value, batch_first=True)
 
-def pad_matrices(matrices: list[Tensor], padding_value: int) -> Tensor:
-    """
-    Stack 2d tensors (matrices) into a single 3d tensor so that each matrix is padded on the
-    right and bottom.
-    """
-    # Determine the maximum size in each dimension
-    max_height = max(t.size(0) for t in matrices)
-    max_width = max(t.size(1) for t in matrices)
-    assert max_height == max_width, "Matrices must be square."
-
-    # Create a single tensor for all matrices
-    padded_tensor = torch.full((len(matrices), max_height, max_width), padding_value)
-
-    # Stack tensors directly into the larger tensor
-    for i, matrix in enumerate(matrices):
-        padded_tensor[i, :matrix.size(0), :matrix.size(1)] = matrix
-    return padded_tensor
-
 
 def _build_condition_mask(sentences: list[list[str]], condition_fn: callable, device) -> Tensor:
     masks = [
@@ -79,7 +61,7 @@ def build_null_mask(sentences: list[list[str]], device) -> Tensor:
 
 def pairwise_mask(masks1d: Tensor) -> Tensor:
     """
-    Calculate an outer product of a mask, i.e. masks2d[:, i, j] = masks1d[:, i] * masks1d[:, j].
+    Calculate an outer product of a mask, i.e. masks2d[:, i, j] = masks1d[:, i] & masks1d[:, j].
     Example:
     >>> masks1d = tensor([[True, True,  True, False],
                           [True, True, False, False]])
@@ -94,7 +76,7 @@ def pairwise_mask(masks1d: Tensor) -> Tensor:
                  [False, False, False, False],
                  [False, False, False, False]]])
     """
-    return masks1d[:, None, :] * masks1d[:, :, None]
+    return masks1d[:, None, :] & masks1d[:, :, None]
 
 
 # Credits: https://docs.allennlp.org/main/api/nn/util/#replace_masked_values

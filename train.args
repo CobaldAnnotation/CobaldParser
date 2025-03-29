@@ -8,3 +8,4 @@
 --batch_eval_metrics True
 --label_names lemma_rules morph_feats syntax_ud syntax_eud miscs deepslots semclasses counting_mask
 --seed 42
+--remove_unused_columns False

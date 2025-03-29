@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from torch import Tensor
+from torch import Tensor, LongTensor
 
 from transformers import AutoTokenizer, AutoModel
 
@@ -44,7 +44,7 @@ class MaskedLanguageModelEncoder(nn.Module):
         # Index words from 1 and reserve 0 for special subtokens (e.g. <s>, </s>, padding, etc.).
         # Such numeration makes a following aggregation easier.
         words_ids = torch.stack([
-            torch.tensor(
+            LongTensor(
                 [word_id + 1 if word_id is not None else 0 for word_id in subtokens.word_ids(batch_idx)],
                 device=self.model.device
             )
@@ -62,7 +62,7 @@ class MaskedLanguageModelEncoder(nn.Module):
     def _aggregate_subtokens_embeddings(
         self,
         subtokens_embeddings: Tensor, # [batch_size, n_subtokens, embedding_size]
-        words_ids: Tensor             # [batch_size, n_subtokens]
+        words_ids: LongTensor          # [batch_size, n_subtokens]
     ) -> Tensor:
         """
         Aggregate subtoken embeddings into word embeddings by averaging.

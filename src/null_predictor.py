@@ -41,14 +41,15 @@ class NullPredictor(nn.Module):
         words_without_nulls = self._remove_nulls(words_with_cls)
         # Embeddings of words without nulls.
         embeddings_without_nulls = self.encoder(words_without_nulls)
-
         # Predict counting mask.
         output = self.null_classifier(embeddings_without_nulls, counting_mask_gold)
-
         # Restore predicted nulls in the original sentences.
-        output["words_with_nulls"] = self._add_nulls(words, output["preds"])
-
-        return output
+        words_with_nulls = self._add_nulls(words, output["preds"])
+        return {
+            "words_with_nulls": words_with_nulls,
+            "counting_mask": output["preds"],
+            "loss": output["loss"]
+        }
 
     @staticmethod
     def _prepend_cls(sentences: list[list[str]]) -> list[list[str]]:

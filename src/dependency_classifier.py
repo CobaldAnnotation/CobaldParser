@@ -5,7 +5,7 @@ import numpy as np
 
 import torch
 from torch import nn
-from torch import Tensor, BoolTensor, LongTensor
+from torch import Tensor, FloatTensor, BoolTensor, LongTensor
 import torch.nn.functional as F
 
 from src.activations import get_activation_fn
@@ -57,41 +57,60 @@ class DependencyHeadBase(nn.Module):
         # Calculate loss.
         loss = torch.tensor(0.)
         if gold_arcs is not None:
-            arc_loss, rel_loss = self.calc_loss(s_arc, s_rel, gold_arcs)
-            # Aggregate both losses into one.
-            loss = arc_loss + rel_loss
+            loss += self.calc_arc_loss(s_arc, gold_arcs)
+            loss += self.calc_rel_loss(s_rel, gold_arcs)
 
         # Predict arcs based on the scores.
-        pred_arcs = self.predict_arcs(s_arc, mask)
-        # Greedily select the most probable relation for each possible arc.
-        # - [batch_size, seq_len, seq_len]
-        pred_rels = s_rel.argmax(dim=-1)
-        # Select relations towards predicted arcs.
-        pred_rels = torch.where(pred_arcs.bool(), pred_rels, -torch.ones_like(pred_rels))
-
+        # [batch_size, seq_len, seq_len]
+        pred_arcs_3d = self.predict_arcs(s_arc, mask)
+        # [batch_size, seq_len, seq_len]
+        pred_rels_3d = self.predict_rels(s_rel)
+        # [n_pred_arcs, 4]
+        preds = self.combine_arcs_rels(pred_arcs_3d, pred_rels_3d)
         return {
-            # Return relations only, because arcs are inferred from it trivially.
-            'preds': pred_rels,
+            'preds': preds,
             'loss': loss
         }
 
+    def calc_arc_loss(
+        self,
+        s_arc: Tensor,         # [batch_size, seq_len, seq_len]
+        gold_arcs: LongTensor  # [n_arcs, 4]
+    ) -> Tensor:
+        """Calculate arc loss."""
+        raise NotImplementedError
+
+    def calc_rel_loss(
+        self,
+        s_rel: Tensor,         # [batch_size, seq_len, seq_len, num_labels]
+        gold_arcs: LongTensor  # [n_arcs, 4]
+    ) -> Tensor:
+        batch_idxs, arcs_from, arcs_to, rels = gold_arcs.T
+        return F.cross_entropy(s_rel[batch_idxs, arcs_from, arcs_to], rels)
+    
     def predict_arcs(
         self,
         s_arc: Tensor,   # [batch_size, seq_len, seq_len]
         mask: BoolTensor # [batch_size, seq_len]
-    ) -> Tensor:
+    ) -> LongTensor:
         """Predict arcs from scores."""
         raise NotImplementedError
-
-    def calc_loss(
+    
+    def predict_rels(
         self,
-        s_arc: Tensor,         # [batch_size, seq_len, seq_len]
-        s_rel: Tensor,         # [batch_size, seq_len, seq_len, num_labels]
-        gold_arcs: LongTensor  # [n_arcs, 4]
-    ) -> tuple[Tensor, Tensor]:
-        """Calculate arc and relation loss."""
-        raise NotImplementedError
-
+        s_rel: FloatTensor
+    ) -> LongTensor:
+        return s_rel.argmax(dim=-1).long()
+    
+    def combine_arcs_rels(
+        self,
+        pred_arcs: LongTensor,
+        pred_rels: LongTensor
+    ) -> LongTensor:
+        assert pred_arcs.shape == pred_rels.shape
+        # Select relations towards predicted arcs.
+        return F.one_hot(pred_arcs * pred_rels).nonzero()
+        
 
 class DependencyHead(DependencyHeadBase):
     """
@@ -117,7 +136,7 @@ class DependencyHead(DependencyHeadBase):
 
         # Upscale arcs sequence of shape [batch_size, seq_len]
         # to matrix of shape [batch_size, seq_len, seq_len].
-        pred_arcs = F.one_hot(pred_arcs_seq, num_classes=pred_arcs_seq.size(1))
+        pred_arcs = F.one_hot(pred_arcs_seq, num_classes=pred_arcs_seq.size(1)).long()
         return pred_arcs
 
     def _mst_decode(
@@ -163,17 +182,13 @@ class DependencyHead(DependencyHeadBase):
         return pred_arcs
 
     @override
-    def calc_loss(
+    def calc_arc_loss(
         self,
         s_arc: Tensor,         # [batch_size, seq_len, seq_len]
-        s_rel: Tensor,         # [batch_size, seq_len, seq_len, num_labels]
         gold_arcs: LongTensor  # [n_arcs, 4]
     ) -> tuple[Tensor, Tensor]:
         batch_idxs, arcs_from, arcs_to, rels = gold_arcs.T
-        # Calculate arc and rel loss for all present arcs.
-        arc_loss = F.cross_entropy(s_arc[batch_idxs, arcs_from], arcs_to)
-        rel_loss = F.cross_entropy(s_rel[batch_idxs, arcs_from, arcs_to], rels)
-        return arc_loss, rel_loss
+        return F.cross_entropy(s_arc[batch_idxs, arcs_from], arcs_to)
 
 
 class MultiDependencyHead(DependencyHeadBase):
@@ -192,23 +207,22 @@ class MultiDependencyHead(DependencyHeadBase):
         arc_probs = torch.sigmoid(s_arc)
         # Find confident arcs (with prob > 0.5).
         pred_arcs = arc_probs.round().long()
+        # 
         return pred_arcs
 
     @override
-    def calc_loss(
+    def calc_arc_loss(
         self,
         s_arc: Tensor,         # [batch_size, seq_len, seq_len]
-        s_rel: Tensor,         # [batch_size, seq_len, seq_len, num_labels]
         gold_arcs: LongTensor  # [n_arcs, 4]
-    ) -> tuple[Tensor, Tensor]:
+    ) -> Tensor:
         batch_idxs, arc_from, arc_to, rels = gold_arcs.T
         # Gold arcs but as a matrix, where matrix[i, arcs_from, arc_to] = 1.0 if arcs is present.
         gold_arcs_matrix = torch.zeros_like(s_arc)
         gold_arcs_matrix[batch_idxs, arc_from, arc_to] = 1.0
         # Padded arcs's logits are huge negative values that doesn't contribute to the loss.
         arc_loss = F.binary_cross_entropy_with_logits(s_arc, gold_arcs_matrix)
-        rel_loss = F.cross_entropy(s_rel[batch_idxs, arc_from, arc_to], rels)
-        return arc_loss, rel_loss
+        return arc_loss
 
 
 class DependencyClassifier(nn.Module):

@@ -1,23 +1,29 @@
 import pytest
 import torch
-from torch import FloatTensor, LongTensor
 from src.dependency_classifier import DependencyHead, MultiDependencyHead
 
 
 @pytest.fixture
-def sample_data():    
+def s_arc():
+    # A constant for readability
+    mask = -1e8
     # Create sample scores
-    s_arc = FloatTensor(
-        [[[-1.42,  0.52,  0.17,  0.08],
-          [ 0.37,  0.19, -0.13, -1.14],
-          [ 1.66,  0.54,  1.03, -0.40],
-          [ 0.18,  0.20,  0.82,  1.31]],
-         [[-0.56, -2.21,  1.54, -0.54],
-          [-1.37, -0.58, -0.26, -1.06],
-          [ 0.57, -0.06,  0.80,  1.04],
-          [-1.02, -2.50,  1.29, -1.05]]]
+    return torch.tensor(
+        # batch 0, token 3 is padded
+        [[[-1.42,  0.52,  0.17,  mask],
+          [ 0.37,  0.19, -0.13,  mask],
+          [ 1.66,  0.54,  1.03,  mask],
+          [ mask,  mask,  mask,  mask]],
+        # batch 1, token 2 is masked
+         [[-0.56, -2.21,  mask, -0.54],
+          [-1.37, -0.58,  mask, -1.06],
+          [ mask,  mask,  mask,  mask],
+          [-1.02, -2.50,  mask, -1.05]]]
     )
-    s_rel = FloatTensor(
+
+@pytest.fixture
+def s_rel():
+    return torch.tensor(
         [[[[-0.52, -1.04, -0.88,  0.05,  0.51],
            [-0.81, -0.21, -0.52,  1.18, -0.79],
            [ 0.01, -0.44, -0.41, -0.92, -1.45],
@@ -51,12 +57,11 @@ def sample_data():
            [-2.08,  0.65,  0.51, -0.69, -1.05],
            [-0.91, -0.40, -0.25, -0.54, -0.22]]]]
     )
-    assert s_arc.shape == torch.Size([2, 4, 4])
-    assert s_rel.shape == torch.Size([2, 4, 4, 5])
-    batch_size, seq_len, seq_len, n_rels = s_rel.shape
 
+@pytest.fixture
+def gold_arcs():
     # Create gold arcs [n_arcs, 4] where the columns are [batch_idx, dep_idx, head_idx, rel_idx]
-    gold_arcs = LongTensor(
+    return torch.tensor(
         [[0, 0, 1, 2],  # batch 0, token 0 has head at 1 with relation 2
          [0, 1, 2, 4],  # batch 0, token 1 has head at 2 with relation 4
          [0, 2, 0, 4],  # batch 0, token 2 has head at 0 with relation 4
@@ -67,56 +72,26 @@ def sample_data():
          [1, 3, 1, 0]], # batch 1, token 3 has head at 1 with relation 0
     )
 
-    return {
-        's_arc': s_arc,
-        's_rel': s_rel,
-        'seq_len': seq_len,
-        'n_rels': n_rels,
-        'gold_arcs': gold_arcs
-    }
 
+class TestDependencyHead:
 
-class TestDependencyHeadCalcLoss:
+    @pytest.fixture(autouse=True)
+    def setup(self, s_rel):
+        self.dependency_head = DependencyHead(hidden_size=16, n_rels=s_rel.size(-1))
 
-    def test_calc_loss(self, sample_data):
-        dependency_head = DependencyHead(hidden_size=16, n_rels=sample_data['n_rels'])
+    def test_calc_arc_loss(self, s_arc, gold_arcs):
+        arc_loss = self.dependency_head.calc_arc_loss(s_arc, gold_arcs)
+        assert torch.isclose(arc_loss, torch.tensor(1.3446), atol=1e-4)
 
-        arc_loss, rel_loss = dependency_head.calc_loss(
-            sample_data['s_arc'],
-            sample_data['s_rel'],
-            sample_data['gold_arcs']
-        )
-        
-        assert torch.isclose(arc_loss, torch.tensor(1.4174), atol=1e-4)
-        assert torch.isclose(rel_loss, torch.tensor(2.2967), atol=1e-4)
-
-
-class TestMultiDependencyHeadCalcLoss:
-    
-    def test_calc_loss(self, sample_data):
-        dependency_head = MultiDependencyHead(hidden_size=16, n_rels=sample_data['n_rels'])
-        
-        arc_loss, rel_loss = dependency_head.calc_loss(
-            sample_data['s_arc'],
-            sample_data['s_rel'],
-            sample_data['gold_arcs']
-        )
-        
-        assert torch.isclose(arc_loss, torch.tensor(0.7647), atol=1e-4)
-        assert torch.isclose(rel_loss, torch.tensor(2.2967), atol=1e-4)
-
-    def test_calc_loss_with_masked_scores(self, sample_data):
-        dependency_head = MultiDependencyHead(hidden_size=16, n_rels=sample_data['n_rels'])
-        
-        s_arc = sample_data['s_arc']
-        s_arc[0, 3, :] = s_arc[0, :, 3] = -1e16 # batch 0, token 3 is padded
-        s_arc[1, 2, :] = s_arc[1, :, 2] = -1e16 # batch 1, token 2 is masked
-
-        arc_loss, rel_loss = dependency_head.calc_loss(
-            s_arc,
-            sample_data['s_rel'],
-            sample_data['gold_arcs']
-        )
-        
-        assert torch.isclose(arc_loss, torch.tensor(0.4494), atol=1e-4)
+    def test_calc_rel_loss(self, s_rel, gold_arcs):
+        rel_loss = self.dependency_head.calc_rel_loss(s_rel, gold_arcs)
         assert torch.isclose(rel_loss, torch.tensor(2.1603), atol=1e-4)
+
+    # TODO: test predictions
+
+
+class TestMultiDependencyHead:
+
+    def test_calc_arc_loss(self, s_arc, gold_arcs):
+        arc_loss = MultiDependencyHead.calc_arc_loss(s_arc, gold_arcs)
+        assert torch.isclose(arc_loss, torch.tensor(0.4494), atol=1e-4)

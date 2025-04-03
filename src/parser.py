@@ -85,14 +85,14 @@ class MorphoSyntaxSemanticsParser(PreTrainedModel):
         loss = null_output['loss'] + tagger_output['loss']
 
         return {
-            'words_with_nulls': null_output['words_with_nulls'],
+            'words': null_output['words_with_nulls'],
             'counting_mask': null_output['counting_mask'],
-            'lemma_rule_preds': tagger_output['lemma_rule_preds'],
-            'morph_feats_preds': tagger_output['morph_feats_preds'],
-            'deps_ud_preds': tagger_output['deps_ud_preds'],
-            'deps_eud_preds': tagger_output['deps_eud_preds'],
-            'misc_preds': tagger_output['misc_preds'],
-            'deepslot_preds': tagger_output['deepslot_preds'],
-            'semclass_preds': tagger_output['semclass_preds'],
+            'lemma_rules': tagger_output['lemma_rules'],
+            'morph_feats': tagger_output['morph_feats'],
+            'syntax_ud': tagger_output['syntax_ud'],
+            'syntax_eud': tagger_output['syntax_eud'],
+            'miscs': tagger_output['miscs'],
+            'deepslots': tagger_output['deepslots'],
+            'semclasses': tagger_output['semclasses'],
             'loss': loss
         }

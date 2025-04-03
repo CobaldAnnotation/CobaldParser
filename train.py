@@ -9,25 +9,17 @@ from transformers import (
 from src.processing import preprocess, collate_with_ignore_index
 from src.parser import MorphoSyntaxSemanticsParserConfig, MorphoSyntaxSemanticsParser
 
+from src.metrics import compute_metrics
+
 # FIXME
 import importlib
 import transformers
 importlib.reload(transformers)
 
-# TODO
-def compute_metrics(eval_pred, compute_result: bool):
-    preds, labels = eval_pred
-    print(f"compute_metrics is called")
-    # print(preds)
-    # print(labels)
-    print(f"preds: {len(preds)} items: {list(pred.shape for pred in preds)}")
-    print(f"labels: {len(labels)} items: {list(label.shape for label in labels)}")
-    return {"eval_loss": 0.0}
-
 
 def train(training_args: TrainingArguments, model_config_path: str):
     # FIXME
-    val_dataset = load_dataset("CoBaLD/enhanced-cobald-dataset", name="en", trust_remote_code=True)['train']
+    val_dataset = load_dataset("CoBaLD/enhanced-cobald-dataset", name="en", trust_remote_code=True)['train'].take(100)
     # val_dataset.cleanup_cache_files()
     val_dataset = preprocess(val_dataset)
 
@@ -60,7 +52,7 @@ def train(training_args: TrainingArguments, model_config_path: str):
         data_collator=collate_with_ignore_index,
         compute_metrics=compute_metrics,
     )
-    trainer.train(ignore_keys_for_eval=['words_with_nulls', 'sent_id', 'text'])
+    trainer.train(ignore_keys_for_eval=['words', 'sent_id', 'text'])
 
 
 if __name__ == "__main__":

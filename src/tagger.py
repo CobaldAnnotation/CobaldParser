@@ -90,12 +90,12 @@ class MultiHeadTagger(nn.Module):
         )
 
         return {
-            'lemma_rule_preds': lemma_out['preds'],
-            'morph_feats_preds': morph_feats_out['preds'],
-            'deps_ud_preds': deps_out['preds_ud'],
-            'deps_eud_preds': deps_out['preds_eud'],
-            'misc_preds': misc_out['preds'],
-            'deepslot_preds': deepslot_out['preds'],
-            'semclass_preds': semclass_out['preds'],
+            'lemma_rules': lemma_out['preds'],
+            'morph_feats': morph_feats_out['preds'],
+            'syntax_ud': deps_out['preds_ud'],
+            'syntax_eud': deps_out['preds_eud'],
+            'miscs': misc_out['preds'],
+            'deepslots': deepslot_out['preds'],
+            'semclasses': semclass_out['preds'],
             'loss': loss
         }

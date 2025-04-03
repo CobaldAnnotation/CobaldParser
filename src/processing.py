@@ -212,11 +212,11 @@ def collate_with_ignore_index(batches: list[dict]) -> dict:
     def collate_syntax(arcs_from_name: str, arcs_to_name: str, deprel_name: str) -> LongTensor:
         batch_size = len(batches)
         arcs_counts = LongTensor([len(batch[arcs_from_name]) for batch in batches])
-        arc_batch_indexes = torch.arange(batch_size).repeat_interleave(arcs_counts)
-        arcs_from_flat = torch.concat(gather_tensor_column(arcs_from_name))
-        arcs_to_flat = torch.concat(gather_tensor_column(arcs_to_name))
-        deprels_flat = torch.concat(gather_tensor_column(deprel_name))
-        return torch.stack([arc_batch_indexes, arcs_from_flat, arcs_to_flat, deprels_flat]).T
+        batch_idxs = torch.arange(batch_size).repeat_interleave(arcs_counts)
+        from_idxs = torch.concat(gather_tensor_column(arcs_from_name))
+        to_idxs = torch.concat(gather_tensor_column(arcs_to_name))
+        deprels = torch.concat(gather_tensor_column(deprel_name))
+        return torch.stack([batch_idxs, from_idxs, to_idxs, deprels], dim=1)
 
     counting_masks_batched = stack_padded('counting_mask')
     lemma_rules_batched = stack_padded('lemma_rules')

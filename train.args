@@ -5,6 +5,6 @@
 --use_cpu False
 --save_safetensors False
 --eval_on_start True
---label_names lemma_rules morph_feats syntax_ud syntax_eud miscs deepslots semclasses counting_mask
+--label_names counting_mask lemma_rules morph_feats syntax_ud syntax_eud miscs deepslots semclasses
 --seed 42
 --remove_unused_columns False

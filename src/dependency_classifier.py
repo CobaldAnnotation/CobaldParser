@@ -66,22 +66,22 @@ class DependencyHeadBase(nn.Module):
         # [batch_size, seq_len, seq_len]
         pred_rels_3d = self.predict_rels(s_rel)
         # [n_pred_arcs, 4]
-        preds = self.combine_arcs_rels(pred_arcs_3d, pred_rels_3d)
+        preds_combined = self.combine_arcs_rels(pred_arcs_3d, pred_rels_3d)
         return {
-            'preds': preds,
+            'preds': preds_combined,
             'loss': loss
         }
 
+    @staticmethod
     def calc_arc_loss(
-        self,
         s_arc: Tensor,         # [batch_size, seq_len, seq_len]
         gold_arcs: LongTensor  # [n_arcs, 4]
     ) -> Tensor:
         """Calculate arc loss."""
         raise NotImplementedError
 
+    @staticmethod
     def calc_rel_loss(
-        self,
         s_rel: Tensor,         # [batch_size, seq_len, seq_len, num_labels]
         gold_arcs: LongTensor  # [n_arcs, 4]
     ) -> Tensor:
@@ -102,15 +102,21 @@ class DependencyHeadBase(nn.Module):
     ) -> LongTensor:
         return s_rel.argmax(dim=-1).long()
     
+    @staticmethod
     def combine_arcs_rels(
-        self,
         pred_arcs: LongTensor,
         pred_rels: LongTensor
     ) -> LongTensor:
+        """Select relations towards predicted arcs."""
         assert pred_arcs.shape == pred_rels.shape
-        # Select relations towards predicted arcs.
-        return F.one_hot(pred_arcs * pred_rels).nonzero()
-        
+        # Get indices where arcs exist
+        indices = pred_arcs.nonzero(as_tuple=True)
+        batch_idxs, from_idxs, to_idxs = indices
+        # Get corresponding relation types
+        rel_types = pred_rels[batch_idxs, from_idxs, to_idxs]
+        # Stack as [batch_idx, from_idx, to_idx, rel_type]
+        return torch.stack([batch_idxs, from_idxs, to_idxs, rel_types], dim=1)
+
 
 class DependencyHead(DependencyHeadBase):
     """
@@ -181,14 +187,14 @@ class DependencyHead(DependencyHeadBase):
         pred_arcs = torch.from_numpy(np.stack(pred_arcs)).long().to(device)
         return pred_arcs
 
+    @staticmethod
     @override
     def calc_arc_loss(
-        self,
         s_arc: Tensor,         # [batch_size, seq_len, seq_len]
         gold_arcs: LongTensor  # [n_arcs, 4]
     ) -> tuple[Tensor, Tensor]:
-        batch_idxs, arcs_from, arcs_to, rels = gold_arcs.T
-        return F.cross_entropy(s_arc[batch_idxs, arcs_from], arcs_to)
+        batch_idxs, from_idxs, to_idxs, _ = gold_arcs.T
+        return F.cross_entropy(s_arc[batch_idxs, from_idxs], to_idxs)
 
 
 class MultiDependencyHead(DependencyHeadBase):
@@ -202,27 +208,23 @@ class MultiDependencyHead(DependencyHeadBase):
         s_arc: Tensor,   # [batch_size, seq_len, seq_len]
         mask: BoolTensor # [batch_size, seq_len]
     ) -> Tensor:
-
         # Convert scores to probabilities.
         arc_probs = torch.sigmoid(s_arc)
         # Find confident arcs (with prob > 0.5).
-        pred_arcs = arc_probs.round().long()
-        # 
-        return pred_arcs
+        return arc_probs.round().long()
 
+    @staticmethod
     @override
     def calc_arc_loss(
-        self,
         s_arc: Tensor,         # [batch_size, seq_len, seq_len]
         gold_arcs: LongTensor  # [n_arcs, 4]
     ) -> Tensor:
-        batch_idxs, arc_from, arc_to, rels = gold_arcs.T
+        batch_idxs, from_idxs, to_idxs, _ = gold_arcs.T
         # Gold arcs but as a matrix, where matrix[i, arcs_from, arc_to] = 1.0 if arcs is present.
         gold_arcs_matrix = torch.zeros_like(s_arc)
-        gold_arcs_matrix[batch_idxs, arc_from, arc_to] = 1.0
+        gold_arcs_matrix[batch_idxs, from_idxs, to_idxs] = 1.0
         # Padded arcs's logits are huge negative values that doesn't contribute to the loss.
-        arc_loss = F.binary_cross_entropy_with_logits(s_arc, gold_arcs_matrix)
-        return arc_loss
+        return F.binary_cross_entropy_with_logits(s_arc, gold_arcs_matrix)
 
 
 class DependencyClassifier(nn.Module):

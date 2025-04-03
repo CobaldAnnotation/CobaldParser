@@ -5,3 +5,16 @@ description = "CoBaLD parser"
 requires-python = ">= 3.12"
 license = {file = "LICENSE"}
 
+# Regular dependencies
+dependencies = [
+    "torch>=2.6.0",
+    "transformers>=4.46.3",
+    "datasets>=3.4.0",
+    "accelerate>=0.26.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "scikit-learn",
+]

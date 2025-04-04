@@ -2,41 +2,6 @@ import torch
 from torch import Tensor
 
 
-# A default ignore_index for PyTorch cross-entropy loss.
-IGNORE_INDEX = -100
-
-
-def recursive_find_unique(data) -> set:
-    """
-    Recursively find all unique elements in a list or nested lists.
-
-    :param data: The list (or nested lists) to process.
-    :return: A set of all unique elements found.
-    """
-    if isinstance(data, str) or isinstance(data, int) or isinstance(data, bool):
-        return {data}
-
-    unique_elements = set()
-    for item in data:
-        unique_elements |= recursive_find_unique(item)
-    return unique_elements
-
-def recursive_replace(data, transform):
-    """
-    Recursively replace elements in a list or nested lists according to a replacement map.
-
-    :param data: The list (or nested lists) to process.
-    :param transform: A function mapping elements to their replacements.
-    :return: A new list with elements replaced.
-    """
-    if isinstance(data, list):
-        # Process each element in the list
-        return [recursive_replace(element, transform) for element in data]
-    else:
-        # Replace the element.
-        return transform(data)
-
-
 def pad_sequences(sequences: list[Tensor], padding_value: int) -> Tensor:
     """
     Stack 1d tensors (sequences) into a single 2d tensor so that each sequence is padded on the
@@ -86,53 +51,3 @@ def replace_masked_values(tensor: Tensor, mask: Tensor, replace_with: float):
     """
     assert tensor.dim() == mask.dim(), "tensor.dim() of {tensor.dim()} != mask.dim() of {mask.dim()}"
     tensor.masked_fill_(~mask, replace_with)
-
-
-def align_two_sentences(lhs: list[str], rhs: list[str]) -> tuple:
-    """
-    Aligns two sequences of tokens. Empty token is inserted where needed.
-    Example:
-    >>> true_tokens = ["How", "did", "this", "#NULL", "happen"]
-    >>> pred_tokens = ["How", "#NULL", "did", "this", "happen"]
-    >>> align_labels(true_tokens, pred_tokens)
-    ['How', '#EMPTY', 'did', 'this',  '#NULL', 'happen'],
-    ['How',  '#NULL', 'did', 'this', '#EMPTY', 'happen']
-    """
-    lhs_aligned, rhs_aligned = [], []
-
-    i, j = 0, 0
-    while i < len(lhs) and j < len(rhs):
-        if lhs[i] == "#NULL" and rhs[j] != "#NULL":
-            lhs_aligned.append(lhs[i])
-            rhs_aligned.append("#EMPTY")
-            i += 1
-        elif lhs[i] != "#NULL" and rhs[j] == "#NULL":
-            lhs_aligned.append("#EMPTY")
-            rhs_aligned.append(rhs[j])
-            j += 1
-        else:
-            assert lhs[i] == rhs[j]
-            lhs_aligned.append(lhs[i])
-            rhs_aligned.append(rhs[j])
-            i += 1
-            j += 1
-
-    if i < len(lhs):
-        # lhs has extra #NULLs at the end, so append #EMPTY node to rhs
-        assert j == len(rhs)
-        while i < len(lhs):
-            lhs_aligned.append(lhs[i])
-            rhs_aligned.append("#NULL")
-            i += 1
-    if j < len(rhs):
-        assert i == len(lhs)
-        while j < len(rhs):
-            lhs_aligned.append("#NULL")
-            rhs_aligned.append(rhs[j])
-            j += 1
-
-    assert len(lhs_aligned) == len(rhs_aligned)
-    return lhs_aligned, rhs_aligned
-
-def align_sentences(lhs: list[list[str]], rhs: list[list[str]]) -> tuple:
-    return zip(*[align_two_sentences(l, r) for l, r in zip(lhs, rhs)])

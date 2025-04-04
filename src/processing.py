@@ -8,7 +8,7 @@ import torch
 from torch import LongTensor
 
 from src.lemmatize_helper import construct_lemma_rule, reconstruct_lemma
-from src.utils import pad_sequences, IGNORE_INDEX
+from src.utils import pad_sequences
 
 
 ROOT = '0'
@@ -157,18 +157,18 @@ def update_schema_with_class_labels(dataset: Dataset) -> Features:
     return features
 
 
-def replace_none_with_ignore_index(example: dict) -> dict:
+def replace_none(example: dict, value: int) -> dict:
     """
-    Replace None labels with IGNORE_INDEX.
+    Replace None labels with specified value.
     """
     for name, column in example.items():
         # Skip metadata fields (they are not lists).
         if isinstance(column, list):
-            example[name] = [IGNORE_INDEX if val is None else val for val in column]
+            example[name] = [value if item is None else item for item in column]
     return example
 
 
-def preprocess(dataset: Dataset) -> Dataset:
+def preprocess(dataset: Dataset, none_value: int = -100) -> Dataset:
     # Remove range tokens.
     dataset = dataset.map(remove_range_tokens, batched=False)
     # Transform fields.
@@ -190,33 +190,30 @@ def preprocess(dataset: Dataset) -> Dataset:
     class_features = update_schema_with_class_labels(dataset)
     dataset = dataset.cast(class_features)
     # Replace None labels with ingore_index.
-    dataset = dataset.map(replace_none_with_ignore_index, batched=False)
+    dataset = dataset.map(lambda sample: replace_none(sample, none_value), batched=False)
     # Convert list labels to tensors.
     dataset = dataset.with_format("torch")
     return dataset
 
 
-def maybe_none(labels: LongTensor) -> LongTensor | None:
-    return None if labels.max() == IGNORE_INDEX or labels.numel() == 0 else labels
-
-def collate_with_ignore_index(batches: list[dict]) -> dict:
+def collate_with_padding(batches: list[dict], padding_value: int = -100) -> dict:
     def gather_column(column_name: str) -> list:
         return [batch[column_name] for batch in batches]
 
-    def gather_tensor_column(column_name: str) -> list:
-        return [LongTensor(batch[column_name]) for batch in batches]
-
     def stack_padded(column_name) -> LongTensor:
-        return pad_sequences(gather_tensor_column(column_name), IGNORE_INDEX)
+        return pad_sequences(gather_column(column_name), padding_value)
 
     def collate_syntax(arcs_from_name: str, arcs_to_name: str, deprel_name: str) -> LongTensor:
         batch_size = len(batches)
-        arcs_counts = LongTensor([len(batch[arcs_from_name]) for batch in batches])
+        arcs_counts = torch.tensor([len(batch[arcs_from_name]) for batch in batches])
         batch_idxs = torch.arange(batch_size).repeat_interleave(arcs_counts)
-        from_idxs = torch.concat(gather_tensor_column(arcs_from_name))
-        to_idxs = torch.concat(gather_tensor_column(arcs_to_name))
-        deprels = torch.concat(gather_tensor_column(deprel_name))
+        from_idxs = torch.concat(gather_column(arcs_from_name))
+        to_idxs = torch.concat(gather_column(arcs_to_name))
+        deprels = torch.concat(gather_column(deprel_name))
         return torch.stack([batch_idxs, from_idxs, to_idxs, deprels], dim=1)
+
+    def maybe_none(labels: LongTensor) -> LongTensor | None:
+        return None if labels.max() == padding_value or labels.numel() == 0 else labels
 
     counting_masks_batched = stack_padded('counting_mask')
     lemma_rules_batched = stack_padded('lemma_rules')

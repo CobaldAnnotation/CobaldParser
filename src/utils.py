@@ -27,19 +27,6 @@ def build_null_mask(sentences: list[list[str]], device) -> Tensor:
 def pairwise_mask(masks1d: Tensor) -> Tensor:
     """
     Calculate an outer product of a mask, i.e. masks2d[:, i, j] = masks1d[:, i] & masks1d[:, j].
-    Example:
-    >>> masks1d = tensor([[True, True,  True, False],
-                          [True, True, False, False]])
-    >>> pairwise_mask(masks1d)
-        tensor([[[ True,  True,  True, False],
-                 [ True,  True,  True, False],
-                 [ True,  True,  True, False],
-                 [False, False, False, False]],
-
-                [[ True,  True, False, False],
-                 [ True,  True, False, False],
-                 [False, False, False, False],
-                 [False, False, False, False]]])
     """
     return masks1d[:, None, :] & masks1d[:, :, None]
 

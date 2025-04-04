@@ -6,15 +6,10 @@ from transformers import (
     TrainingArguments,
     Trainer
 )
-from src.processing import preprocess, collate_with_ignore_index
+
+from src.processing import preprocess, collate_with_padding
 from src.parser import MorphoSyntaxSemanticsParserConfig, MorphoSyntaxSemanticsParser
-
 from src.metrics import compute_metrics
-
-# FIXME
-import importlib
-import transformers
-importlib.reload(transformers)
 
 
 def train(training_args: TrainingArguments, model_config_path: str):
@@ -49,14 +44,13 @@ def train(training_args: TrainingArguments, model_config_path: str):
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        data_collator=collate_with_ignore_index,
+        data_collator=collate_with_padding,
         compute_metrics=compute_metrics,
     )
     trainer.train(ignore_keys_for_eval=['words', 'sent_id', 'text'])
 
 
 if __name__ == "__main__":
-    
     # Use HfArgumentParser with the built-in TrainingArguments class
     parser = HfArgumentParser(TrainingArguments)
     parser.add_argument('--model_config', required=True)

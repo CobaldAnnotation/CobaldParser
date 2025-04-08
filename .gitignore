@@ -24,3 +24,7 @@ MANIFEST
 .venv
 env/
 venv/
+
+# Project-related
+*.log
+serialization/

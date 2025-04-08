@@ -1,6 +1,6 @@
 import json
 import itertools
-from datasets import Dataset, Features, Sequence, Value, ClassLabel
+from datasets import Dataset, DatasetDict, Features, Sequence, Value, ClassLabel
 
 import numpy as np
 
@@ -48,7 +48,7 @@ def build_counting_mask(words: list[str]) -> np.array:
     return counting_mask
 
 
-def renumerate_heads(ids: list[str], heads: list[str]) -> list[dict]:
+def renumerate_heads(ids: list[str], arcs_from: list[str], heads: list[str]) -> list[dict]:
     """
     Renumerate ids, so that #NULLs get integer id, e.g. [1, 1.1, 2] turns into [0, 1, 2].
     Also renumerates deps' heads, starting indexing at 0 and replacing ROOT with self-loop,
@@ -56,12 +56,12 @@ def renumerate_heads(ids: list[str], heads: list[str]) -> list[dict]:
     """
     old2new_id = {old_id: new_id for new_id, old_id in enumerate(ids)}
 
-    heads_renumerated = [
+    arcs_to = [
         old2new_id[head]
         if head != ROOT else token_index
-        for token_index, head in enumerate(heads)
+        for token_index, head in zip(arcs_from, heads, strict=True)
     ]
-    return heads_renumerated
+    return arcs_to
 
 
 def transform_fields(sentence: dict) -> dict:
@@ -91,7 +91,7 @@ def transform_fields(sentence: dict) -> dict:
         for token_index, (head, rel) in enumerate(zip(sentence["heads"], sentence["deprels"], strict=True))
         if head is not None
     ])
-    ud_arcs_to = renumerate_heads(sentence["ids"], ud_heads)
+    ud_arcs_to = renumerate_heads(sentence["ids"], ud_arcs_from, ud_heads)
     # Enhanced syntax.
     eud_arcs_from, eud_heads, eud_deprels = zip(*[
         (token_index, head, rel)
@@ -99,7 +99,7 @@ def transform_fields(sentence: dict) -> dict:
         for head, rel in json.loads(deps).items()
         if deps is not None
     ])
-    eud_arcs_to = renumerate_heads(sentence["ids"], eud_heads)
+    eud_arcs_to = renumerate_heads(sentence["ids"], eud_arcs_from, eud_heads)
 
     return {
         "counting_mask": counting_mask,
@@ -123,7 +123,7 @@ def extract_unique_labels(dataset, column_name) -> list[str]:
     return sorted(unique_labels)
 
 
-def update_schema_with_class_labels(dataset: Dataset) -> Features:
+def build_schema_with_class_labels(dataset: Dataset) -> Features:
     """Update the schema to use ClassLabel for specified columns."""
 
     max_null_count = max(itertools.chain.from_iterable(dataset["counting_mask"]))
@@ -168,11 +168,11 @@ def replace_none(example: dict, value: int) -> dict:
     return example
 
 
-def preprocess(dataset: Dataset, none_value: int = -100) -> Dataset:
+def preprocess(dataset_dict: DatasetDict, none_value: int = -100) -> Dataset:
     # Remove range tokens.
-    dataset = dataset.map(remove_range_tokens, batched=False)
+    dataset_dict = dataset_dict.map(remove_range_tokens)
     # Transform fields.
-    dataset = dataset.map(
+    dataset_dict = dataset_dict.map(
         transform_fields,
         remove_columns=[
             'ids',
@@ -183,17 +183,15 @@ def preprocess(dataset: Dataset, none_value: int = -100) -> Dataset:
             'heads',
             'deprels',
             'deps'
-        ],
-        batched=False
+        ]
     )
     # Encode labels (str -> int).
-    class_features = update_schema_with_class_labels(dataset)
-    dataset = dataset.cast(class_features)
-    # Replace None labels with ingore_index.
-    dataset = dataset.map(lambda sample: replace_none(sample, none_value), batched=False)
+    training_label_schema = build_schema_with_class_labels(dataset_dict['train'])
+    dataset_dict = dataset_dict.cast(training_label_schema)
+    # Replace None labels with ingore_index on-the-fly.
+    dataset_dict = dataset_dict.map(lambda sample: replace_none(sample, none_value))
     # Convert list labels to tensors.
-    dataset = dataset.with_format("torch")
-    return dataset
+    return dataset_dict.with_format("torch")
 
 
 def collate_with_padding(batches: list[dict], padding_value: int = -100) -> dict:

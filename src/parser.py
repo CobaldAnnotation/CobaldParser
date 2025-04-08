@@ -54,8 +54,8 @@ class MorphoSyntaxSemanticsParser(PreTrainedModel):
         miscs: LongTensor = None,
         deepslots: LongTensor = None,
         semclasses: LongTensor = None,
-        sent_id: str = None,
-        text: str = None,
+        sent_ids: list[str] = None,
+        texts: list[str] = None,
         inference_mode: bool = False
     ) -> dict[str, any]:
         

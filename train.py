@@ -1,4 +1,3 @@
-from copy import deepcopy
 from transformers import (
     HfArgumentParser,
     TrainingArguments,
@@ -58,11 +57,9 @@ if __name__ == "__main__":
         trust_remote_code=True
     )
     dataset_dict = preprocess(dataset_dict)
-    # FIXME
-    dataset_dict['validation'] = deepcopy(dataset_dict['train'])
 
     # Print dataset information
-    # print_dataset_info(dataset_dict['train'])
+    print_dataset_info(dataset_dict['train'])
 
     # Create and configure model.
     model = configure_model(custom_args.model_config, custom_args.pretrained_model_path)

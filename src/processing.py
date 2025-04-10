@@ -1,6 +1,14 @@
 import json
 import itertools
-from datasets import Dataset, DatasetDict, Features, Sequence, Value, ClassLabel
+from datasets import (
+    Dataset,
+    DatasetDict,
+    Features,
+    Sequence,
+    Value,
+    ClassLabel,
+    concatenate_datasets
+)
 
 import numpy as np
 
@@ -186,8 +194,11 @@ def preprocess(dataset_dict: DatasetDict, none_value: int = -100) -> Dataset:
         ]
     )
     # Encode labels (str -> int).
-    training_label_schema = build_schema_with_class_labels(dataset_dict['train'])
-    dataset_dict = dataset_dict.cast(training_label_schema)
+    # FIXME: Should be a trainig schema with OOV and special handling in evaluation
+    # but it makes things too complicated.
+    all_data = concatenate_datasets(dataset_dict.values())
+    all_schema = build_schema_with_class_labels(all_data)
+    dataset_dict = dataset_dict.cast(all_schema)
     # Replace None labels with ingore_index on-the-fly.
     dataset_dict = dataset_dict.map(lambda sample: replace_none(sample, none_value))
     # Convert list labels to tensors.
@@ -232,8 +243,8 @@ def collate_with_padding(batches: list[dict], padding_value: int = -100) -> dict
         "miscs": maybe_none(miscs_batched),
         "deepslots": maybe_none(deepslots_batched),
         "semclasses": maybe_none(semclasses_batched),
-        "sent_id": gather_column('sent_id'),
-        "text": gather_column('text')
+        "sent_ids": gather_column('sent_id'),
+        "texts": gather_column('text')
     }
 
 

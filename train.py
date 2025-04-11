@@ -2,12 +2,11 @@ from datasets import load_dataset, concatenate_datasets, DatasetDict
 from transformers import (
     HfArgumentParser,
     TrainingArguments,
-    Trainer,
-    PreTrainedModel
+    Trainer
 )
 
+from cobald_parser import CobaldParserConfig, CobaldParser
 from src.processing import preprocess, collate_with_padding
-from src.parser import MorphoSyntaxSemanticsParserConfig, MorphoSyntaxSemanticsParser
 from src.metrics import compute_metrics
 
 
@@ -23,18 +22,18 @@ def print_dataset_info(dataset_dict: DatasetDict):
     print('-----------------------')
 
 
-def configure_model(model_config_path: str, pretrained_model_path: str = None) -> PreTrainedModel:
+def configure_model(model_config_path: str, pretrained_model_path: str = None) -> CobaldParser:
     # Load model config
-    model_config = MorphoSyntaxSemanticsParserConfig.from_json_file(model_config_path)
+    model_config = CobaldParserConfig.from_json_file(model_config_path)
     
     # Create model or load pretrained one for fine-tuning
     if pretrained_model_path:
-        model = MorphoSyntaxSemanticsParser.from_pretrained(
+        model = CobaldParser.from_pretrained(
             pretrained_model_path,
             config=model_config
         )
     else:
-        model = MorphoSyntaxSemanticsParser(model_config)
+        model = CobaldParser(model_config)
 
     return model
 
@@ -68,8 +67,8 @@ if __name__ == "__main__":
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=dataset_dict['train'],
-        eval_dataset=dataset_dict['validation'],
+        train_dataset=dataset_dict['train'].take(100),
+        eval_dataset=dataset_dict['validation'].take(100),
         data_collator=collate_with_padding,
         compute_metrics=compute_metrics
     )

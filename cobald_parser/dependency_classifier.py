@@ -10,9 +10,9 @@ import torch.nn.functional as F
 
 from transformers.activations import ACT2FN
 
-from src.bilinear_matrix_attention import BilinearMatrixAttention
-from src.chu_liu_edmonds import decode_mst
-from src.utils import pairwise_mask, replace_masked_values
+from cobald_parser.bilinear_matrix_attention import BilinearMatrixAttention
+from cobald_parser.chu_liu_edmonds import decode_mst
+from cobald_parser.utils import pairwise_mask, replace_masked_values
 
 
 class DependencyHeadBase(nn.Module):

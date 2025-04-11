@@ -4,19 +4,28 @@ A neural network parser that annotates tokenized text (*.conllu file) in CoBaLD 
 
 ## Setup
 
-Create and activate virtual environment
+Using python virtual enviroment:
 ```
 python -m venv .venv
 source .venv/bin/activate
+pip install .
 ```
-Then install dependencies with `pip install -e .` for regular use or `pip install -e ".[test]"` for development.
 
 ## Usage
 
 ### Train
+
+Example:
 ```
-python train.py -h
+python train.py \
+    --model_config model_config.json \
+    --dataset_path CoBaLD/enhanced-cobald-dataset \
+    --dataset_name en \
+    --output_dir serialization/test_run \
+    --use_cpu False
 ```
+
+For a full list of options, run `python train.py -h`.
 
 ### Predict
 

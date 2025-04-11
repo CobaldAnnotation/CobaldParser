@@ -9,18 +9,11 @@ class MaskedLanguageModelEncoder(nn.Module):
     """
     Encodes sentences into word-level embeddings using a pretrained MLM transformer.
     """
-    def __init__(
-        self,
-        model_name: str,
-        train_parameters: bool = False
-    ):
+    def __init__(self, model_name: str):
         super().__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         # Model like BERT, RoBERTa, etc.
         self.model = AutoModel.from_pretrained(model_name)
-        # Train or freeze model.
-        for param in self.model.parameters():
-            param.requires_grad = train_parameters
 
     def forward(self, words: list[list[str]]) -> Tensor:
         """

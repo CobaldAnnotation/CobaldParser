@@ -1,26 +1,26 @@
+from datasets import load_dataset, concatenate_datasets, DatasetDict
 from transformers import (
     HfArgumentParser,
     TrainingArguments,
     Trainer,
     PreTrainedModel
 )
-from datasets import load_dataset, Dataset
 
 from src.processing import preprocess, collate_with_padding
 from src.parser import MorphoSyntaxSemanticsParserConfig, MorphoSyntaxSemanticsParser
 from src.metrics import compute_metrics
 
 
-def print_dataset_info(dataset: Dataset):
+def print_dataset_info(dataset_dict: DatasetDict):
     print("\nDataset Information:")
     print(f"{'Column Name':<30} {'n_classes'}")
-    
-    for column in [
-        "counting_mask", "lemma_rules", "morph_feats", "ud_deprels", "eud_deprels",
-        "miscs", "deepslots", "semclasses"
-    ]:
-        if column in dataset.features:
-            print(f"{column:<30} {dataset.features[column].feature.num_classes}")
+    full_dataset = concatenate_datasets(dataset_dict.values())
+    for column in full_dataset.features:
+        try:
+            print(f"{column:<30} {full_dataset.features[column].feature.num_classes}")
+        except:
+            pass
+    print('-----------------------')
 
 
 def configure_model(model_config_path: str, pretrained_model_path: str = None) -> PreTrainedModel:
@@ -59,12 +59,12 @@ if __name__ == "__main__":
     dataset_dict = preprocess(dataset_dict)
 
     # Print dataset information
-    print_dataset_info(dataset_dict['train'])
+    print_dataset_info(dataset_dict)
 
     # Create and configure model.
     model = configure_model(custom_args.model_config, custom_args.pretrained_model_path)
 
-    # Create trainer
+    # Create trainer and train the model.
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -73,5 +73,4 @@ if __name__ == "__main__":
         data_collator=collate_with_padding,
         compute_metrics=compute_metrics
     )
-    # Start training
     trainer.train(ignore_keys_for_eval=['words', 'sent_id', 'text'])

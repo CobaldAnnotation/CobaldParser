@@ -1,51 +1,20 @@
 {
-  "encoder_args": {
-    "model_name": "distilbert-base-uncased",
-    "train_parameters": true
-  },
-  "null_predictor_args": {
-    "hidden_size": 512,
-    "consecutive_null_limit": 2,
-    "activation": "relu",
-    "dropout": 0.1
-  },
-  "tagger_args": {
-    "lemma_rule_classifier_args": {
-      "hidden_size": 512,
-      "n_classes": 158,
-      "activation": "relu",
-      "dropout": 0.1
-    },
-    "morph_feats_classifier_args": {
-      "hidden_size": 512,
-      "n_classes": 205,
-      "activation": "relu",
-      "dropout": 0.1
-    },
-    "depencency_classifier_args": {
-      "hidden_size": 128,
-      "n_rels_ud": 50,
-      "n_rels_eud": 202,
-      "activation": "relu",
-      "dropout": 0.1
-    },
-    "misc_classifier_args": {
-      "hidden_size": 512,
-      "n_classes": 17,
-      "activation": "relu",
-      "dropout": 0.1
-    },
-    "deepslot_classifier_args": {
-      "hidden_size": 256,
-      "n_classes": 133,
-      "activation": "relu",
-      "dropout": 0.1
-    },
-    "semclass_classifier_args": {
-      "hidden_size": 512,
-      "n_classes": 541,
-      "activation": "relu",
-      "dropout": 0.1
-    }
-  }
+  "encoder_model_name": "distilbert-base-uncased",
+
+  "null_classifier_hidden_size": 512,
+  "lemma_classifier_hidden_size": 512,
+  "morphology_classifier_hidden_size": 512,
+  "dependency_classifier_hidden_size": 128,
+  "misc_classifier_hidden_size": 512,
+  "deepslot_classifier_hidden_size": 256,
+  "semclass_classifier_hidden_size": 512,
+
+  "consecutive_null_limit": 2,
+  "num_lemmas": 158,
+  "num_morph_feats": 205,
+  "num_rels_ud": 50,
+  "num_rels_eud": 202,
+  "num_miscs": 17,
+  "num_deepslots": 133,
+  "num_semclasses": 541
 }

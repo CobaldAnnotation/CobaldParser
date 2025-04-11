@@ -1,10 +1,6 @@
+--eval_on_start True
 --eval_strategy epoch
 --save_strategy epoch
 --load_best_model_at_end True
---push_to_hub False
---use_cpu False
---save_safetensors False
---eval_on_start True
 --label_names counting_mask lemma_rules morph_feats syntax_ud syntax_eud miscs deepslots semclasses
---seed 42
 --remove_unused_columns False

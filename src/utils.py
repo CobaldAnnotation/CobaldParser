@@ -38,3 +38,29 @@ def replace_masked_values(tensor: Tensor, mask: Tensor, replace_with: float):
     """
     assert tensor.dim() == mask.dim(), "tensor.dim() of {tensor.dim()} != mask.dim() of {mask.dim()}"
     tensor.masked_fill_(~mask, replace_with)
+
+
+def prepend_cls(sentences: list[list[str]]) -> list[list[str]]:
+    """
+    Return a copy of sentences with [CLS] token prepended.
+    """
+    return [["[CLS]", *sentence] for sentence in sentences]
+
+def remove_nulls(sentences: list[list[str]]) -> list[list[str]]:
+    """
+    Return a copy of sentences with nulls removed.
+    """
+    return [[word for word in sentence if word != "#NULL"] for sentence in sentences]
+
+def add_nulls(sentences: list[list[str]], counting_mask) -> list[list[str]]:
+    """
+    Return a copy of sentences with nulls restored according to counting masks.
+    """
+    sentences_with_nulls = []
+    for sentence, counting_mask in zip(sentences, counting_mask):
+        sentence_with_nulls = []
+        for word, n_nulls_to_insert in zip(sentence, counting_mask):
+            sentence_with_nulls.append(word)
+            sentence_with_nulls.extend(["#NULL"] * n_nulls_to_insert)
+        sentences_with_nulls.append(sentence_with_nulls)
+    return sentences_with_nulls

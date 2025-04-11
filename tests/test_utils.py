@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from src.utils import (
+from cobald_parser.utils import (
     pad_sequences,
     build_padding_mask,
     build_null_mask,

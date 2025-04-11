@@ -1,6 +1,7 @@
 import pytest
 import torch
-from src.dependency_classifier import DependencyHead, MultiDependencyHead
+
+from cobald_parser.dependency_classifier import DependencyHead, MultiDependencyHead
 
 
 @pytest.fixture

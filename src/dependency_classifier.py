@@ -8,7 +8,8 @@ from torch import nn
 from torch import Tensor, FloatTensor, BoolTensor, LongTensor
 import torch.nn.functional as F
 
-from src.activations import get_activation_fn
+from transformers.activations import ACT2FN
+
 from src.bilinear_matrix_attention import BilinearMatrixAttention
 from src.chu_liu_edmonds import decode_mst
 from src.utils import pairwise_mask, replace_masked_values
@@ -246,7 +247,7 @@ class DependencyClassifier(nn.Module):
         self.arc_dep_mlp = nn.Sequential(
             nn.Dropout(dropout),
             nn.Linear(input_size, hidden_size),
-            get_activation_fn(activation),
+            ACT2FN[activation],
             nn.Dropout(dropout)
         )
         # All mlps are equal.

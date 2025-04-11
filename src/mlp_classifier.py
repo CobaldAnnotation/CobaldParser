@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch import Tensor, LongTensor
 
-from src.activations import get_activation_fn
+from transformers.activations import ACT2FN
 
 
 class MlpClassifier(nn.Module):
@@ -23,7 +23,7 @@ class MlpClassifier(nn.Module):
         self.classifier = nn.Sequential(
             nn.Dropout(dropout),
             nn.Linear(input_size, hidden_size),
-            get_activation_fn(activation),
+            ACT2FN[activation],
             nn.Dropout(dropout),
             nn.Linear(hidden_size, n_classes)
         )

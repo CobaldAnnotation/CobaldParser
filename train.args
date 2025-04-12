@@ -1,6 +1,8 @@
---eval_on_start True
+--eval_on_start
 --eval_strategy epoch
+--load_best_model_at_end
 --save_strategy epoch
---load_best_model_at_end True
+--save_total_limit 2
+--hub_strategy end
 --label_names counting_mask lemma_rules morph_feats syntax_ud syntax_eud miscs deepslots semclasses
 --remove_unused_columns False

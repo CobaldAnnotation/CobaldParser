@@ -22,32 +22,14 @@ def print_dataset_info(dataset_dict: DatasetDict):
     print('-----------------------')
 
 
-def configure_model(model_config_path: str, pretrained_model_path: str = None) -> CobaldParser:
-    # Load model config
-    model_config = CobaldParserConfig.from_json_file(model_config_path)
-    
-    # Create model or load pretrained one for fine-tuning
-    if pretrained_model_path:
-        model = CobaldParser.from_pretrained(
-            pretrained_model_path,
-            config=model_config
-        )
-    else:
-        model = CobaldParser(model_config)
-
-    return model
-
-
 if __name__ == "__main__":
     # Use HfArgumentParser with the built-in TrainingArguments class
     parser = HfArgumentParser(TrainingArguments)
-    parser.add_argument('--model_config', required=True)
     parser.add_argument('--dataset_path', required=True)
     parser.add_argument('--dataset_name', required=True)
-    parser.add_argument('--pretrained_model_path', default=None,
-                        help="Path to pretrained model for fine-tuning")
+    parser.add_argument('--model_config', required=True)
 
-    # Parse command-line arguments directly
+    # Parse command-line arguments.
     training_args, custom_args = parser.parse_args_into_dataclasses()
 
     dataset_dict = load_dataset(
@@ -57,19 +39,21 @@ if __name__ == "__main__":
     )
     dataset_dict = preprocess(dataset_dict)
 
-    # Print dataset information
+    # Print dataset information.
     print_dataset_info(dataset_dict)
 
     # Create and configure model.
-    model = configure_model(custom_args.model_config, custom_args.pretrained_model_path)
+    model_config = CobaldParserConfig.from_json_file(custom_args.model_config)
+    model = CobaldParser(model_config)
 
     # Create trainer and train the model.
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=dataset_dict['train'].take(100),
-        eval_dataset=dataset_dict['validation'].take(100),
+        train_dataset=dataset_dict['train'],
+        eval_dataset=dataset_dict['validation'],
         data_collator=collate_with_padding,
         compute_metrics=compute_metrics
     )
     trainer.train(ignore_keys_for_eval=['words', 'sent_id', 'text'])
+    trainer.save_model()

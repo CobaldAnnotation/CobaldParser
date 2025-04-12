@@ -1,5 +1,9 @@
 import json
 import itertools
+
+import numpy as np
+import torch
+from torch import LongTensor
 from datasets import (
     Dataset,
     DatasetDict,
@@ -10,13 +14,8 @@ from datasets import (
     concatenate_datasets
 )
 
-import numpy as np
-
-import torch
-from torch import LongTensor
-
-from src.lemmatize_helper import construct_lemma_rule, reconstruct_lemma
-from src.utils import pad_sequences
+from src.lemmatize_helper import construct_lemma_rule
+from cobald_parser.utils import pad_sequences
 
 
 ROOT = '0'

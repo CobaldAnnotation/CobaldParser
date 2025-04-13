@@ -1,5 +1,7 @@
 from torch import LongTensor
 from transformers import PreTrainedModel
+from transformers.modeling_outputs import ModelOutput
+from dataclasses import dataclass
 
 from .configuration import CobaldParserConfig
 from .encoder import MaskedLanguageModelEncoder
@@ -12,6 +14,23 @@ from .utils import (
     remove_nulls,
     add_nulls
 )
+
+
+@dataclass
+class CobaldParserOutput(ModelOutput):
+    """
+    Output type for CobaldParser.
+    """
+    loss: float = None
+    words: list = None
+    counting_mask: LongTensor = None
+    lemma_rules: LongTensor = None
+    morph_feats: LongTensor = None
+    syntax_ud: LongTensor = None
+    syntax_eud: LongTensor = None
+    miscs: LongTensor = None
+    deepslots: LongTensor = None
+    semclasses: LongTensor = None
 
 
 class CobaldParser(PreTrainedModel):
@@ -92,7 +111,7 @@ class CobaldParser(PreTrainedModel):
         sent_ids: list[str] = None,
         texts: list[str] = None,
         inference_mode: bool = False
-    ) -> dict[str, any]:
+    ) -> CobaldParserOutput:
         
         # Extra [CLS] token accounts for the case when #NULL is the first token in a sentence.
         words_with_cls = prepend_cls(words)
@@ -147,15 +166,15 @@ class CobaldParser(PreTrainedModel):
             semclass_output['loss']
         )
 
-        return {
-            'words': words_with_nulls,
-            'counting_mask': null_output['preds'],
-            'lemma_rules': lemma_output['preds'],
-            'morph_feats': morph_feats_output['preds'],
-            'syntax_ud': deps_output['preds_ud'],
-            'syntax_eud': deps_output['preds_eud'],
-            'miscs': misc_output['preds'],
-            'deepslots': deepslot_output['preds'],
-            'semclasses': semclass_output['preds'],
-            'loss': loss
-        }
+        return CobaldParserOutput(
+            words=words_with_nulls,
+            counting_mask=null_output['preds'],
+            lemma_rules=lemma_output['preds'],
+            morph_feats=morph_feats_output['preds'],
+            syntax_ud=deps_output['preds_ud'],
+            syntax_eud=deps_output['preds_eud'],
+            miscs=misc_output['preds'],
+            deepslots=deepslot_output['preds'],
+            semclasses=semclass_output['preds'],
+            loss=loss
+        )

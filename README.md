@@ -20,7 +20,7 @@ Example:
 python train.py \
     --model_config model_config.json \
     --dataset_path CoBaLD/enhanced-cobald-dataset \
-    --dataset_name en \
+    --dataset_config_name en \
     --output_dir serialization/distilbert-en \
     --push_to_hub \
     --hub_model_id CoBaLD/cobald-parser-distilbert-en

@@ -104,7 +104,7 @@ if __name__ == "__main__":
     # Use HfArgumentParser with the built-in TrainingArguments class
     parser = HfArgumentParser(TrainingArguments)
     parser.add_argument('--dataset_path', required=True)
-    parser.add_argument('--dataset_name', required=True)
+    parser.add_argument('--dataset_config_name', required=True)
     parser.add_argument('--model_config', required=True)
 
     # Parse command-line arguments.
@@ -112,7 +112,7 @@ if __name__ == "__main__":
 
     dataset_dict = load_dataset(
         custom_args.dataset_path,
-        name=custom_args.dataset_name,
+        name=custom_args.dataset_config_name,
         trust_remote_code=True
     )
     dataset_dict = preprocess(dataset_dict)

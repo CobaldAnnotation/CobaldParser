@@ -87,25 +87,34 @@ def transform_fields(sentence: dict) -> dict:
         if lemma is not None else None
         for word, lemma in zip(sentence["words"], sentence["lemmas"], strict=True)
     ]
+    
     morph_feats = [
         f"{upos}#{xpos}#{feats}"
         if (upos is not None or xpos is not None or feats is not None) else None
         for upos, xpos, feats in zip(sentence["upos"], sentence["xpos"], sentence["feats"], strict=True)
     ]
+
     # Basic syntax.
-    ud_arcs_from, ud_heads, ud_deprels = zip(*[
-        (token_index, str(head), rel)
-        for token_index, (head, rel) in enumerate(zip(sentence["heads"], sentence["deprels"], strict=True))
-        if head is not None
-    ])
+    ud_arcs_from, ud_heads, ud_deprels = zip(
+        *[
+            (token_index, str(head), rel)
+            for token_index, (head, rel) in enumerate(zip(sentence["heads"], sentence["deprels"], strict=True))
+            if head is not None
+        ],
+        strict=True
+    )
     ud_arcs_to = renumerate_heads(sentence["ids"], ud_arcs_from, ud_heads)
+    
     # Enhanced syntax.
-    eud_arcs_from, eud_heads, eud_deprels = zip(*[
-        (token_index, head, rel)
-        for token_index, deps in enumerate(sentence["deps"])
-        for head, rel in json.loads(deps).items()
-        if deps is not None
-    ])
+    eud_arcs_from, eud_heads, eud_deprels = zip(
+        *[
+            (token_index, head, rel)
+            for token_index, deps in enumerate(sentence["deps"])
+            for head, rel in json.loads(deps).items()
+            if deps is not None
+        ],
+        strict=True
+    )
     eud_arcs_to = renumerate_heads(sentence["ids"], eud_arcs_from, eud_heads)
 
     return {

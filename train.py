@@ -88,18 +88,6 @@ class CustomTrainer(Trainer):
         card.save(model_card_filepath)
 
 
-def print_dataset_info(dataset_dict: DatasetDict):
-    print("\nDataset Information:")
-    print(f"{'Column Name':<30} {'n_classes'}")
-    full_dataset = concatenate_datasets(dataset_dict.values())
-    for column in full_dataset.features:
-        try:
-            print(f"{column:<30} {full_dataset.features[column].feature.num_classes}")
-        except:
-            pass
-    print('-----------------------')
-
-
 if __name__ == "__main__":
     # Use HfArgumentParser with the built-in TrainingArguments class
     parser = HfArgumentParser(TrainingArguments)
@@ -117,11 +105,23 @@ if __name__ == "__main__":
     )
     dataset_dict = preprocess(dataset_dict)
 
-    # Print dataset information.
-    print_dataset_info(dataset_dict)
-
     # Create and configure model.
     model_config = CobaldParserConfig.from_json_file(custom_args.model_config)
+    # Map labels and to ids based on dataset features.
+    id2label_kwargs = {}
+    for config_arg, feature_name in [
+        ("id2lemma_rule", "lemma_rules"),
+        ("id2morph_feats", "morph_feats"),
+        ("id2rel_ud", "ud_deprels"),
+        ("id2rel_eud", "eud_deprels"),
+        ("id2misc", "miscs"),
+        ("id2deepslot", "deepslots"),
+        ("id2semclass", "semclasses")
+    ]:
+        feature = dataset_dict['train'].features[feature_name].feature
+        id2label_kwargs[config_arg] = dict(enumerate(feature.names))
+    model_config.update(id2label_kwargs)
+
     model = CobaldParser(model_config)
 
     # Create trainer and train the model.

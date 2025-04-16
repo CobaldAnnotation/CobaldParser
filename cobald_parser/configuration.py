@@ -14,16 +14,16 @@ class CobaldParserConfig(PretrainedConfig):
         misc_classifier_hidden_size: int = 0,
         deepslot_classifier_hidden_size: int = 0,
         semclass_classifier_hidden_size: int = 0,
-        consecutive_null_limit: int = 0,
-        num_lemmas: int = 0,
-        num_morph_feats: int = 0,
-        num_rels_ud: int = 0,
-        num_rels_eud: int = 0,
-        num_miscs: int = 0,
-        num_deepslots: int = 0,
-        num_semclasses: int = 0,
         activation: str = 'relu',
         dropout: float = 0.1,
+        consecutive_null_limit: int = 0,
+        id2lemma_rule: dict[int, str] = {},
+        id2morph_feats: dict[int, str] = {},
+        id2rel_ud: dict[int, str] = {},
+        id2rel_eud: dict[int, str] = {},
+        id2misc: dict[int, str] = {},
+        id2deepslot: dict[int, str] = {},
+        id2semclass: dict[int, str] = {},
         **kwargs
     ):
         self.encoder_model_name = encoder_model_name
@@ -35,13 +35,14 @@ class CobaldParserConfig(PretrainedConfig):
         self.misc_classifier_hidden_size = misc_classifier_hidden_size
         self.deepslot_classifier_hidden_size = deepslot_classifier_hidden_size
         self.semclass_classifier_hidden_size = semclass_classifier_hidden_size
-        self.num_lemmas = num_lemmas
-        self.num_morph_feats = num_morph_feats
-        self.num_rels_ud = num_rels_ud
-        self.num_rels_eud = num_rels_eud
-        self.num_miscs = num_miscs
-        self.num_deepslots = num_deepslots
-        self.num_semclasses = num_semclasses
         self.activation = activation
         self.dropout = dropout
+        # Vocabulary
+        self.id2lemma_rule = id2lemma_rule
+        self.id2morph_feats = id2morph_feats
+        self.id2rel_ud = id2rel_ud
+        self.id2rel_eud = id2rel_eud
+        self.id2misc = id2misc
+        self.id2deepslot = id2deepslot
+        self.id2semclass = id2semclass
         super().__init__(**kwargs)

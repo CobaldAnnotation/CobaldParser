@@ -1,6 +1,5 @@
 {
   "encoder_model_name": "distilbert-base-uncased",
-
   "null_classifier_hidden_size": 512,
   "lemma_classifier_hidden_size": 512,
   "morphology_classifier_hidden_size": 512,
@@ -8,13 +7,5 @@
   "misc_classifier_hidden_size": 512,
   "deepslot_classifier_hidden_size": 256,
   "semclass_classifier_hidden_size": 512,
-
-  "consecutive_null_limit": 2,
-  "num_lemmas": 158,
-  "num_morph_feats": 205,
-  "num_rels_ud": 50,
-  "num_rels_eud": 202,
-  "num_miscs": 17,
-  "num_deepslots": 133,
-  "num_semclasses": 541
+  "consecutive_null_limit": 2
 }

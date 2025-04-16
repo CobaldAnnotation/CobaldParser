@@ -56,43 +56,43 @@ class CobaldParser(PreTrainedModel):
         self.lemma_rule_classifier = MlpClassifier(
             input_size=embedding_size,
             hidden_size=config.lemma_classifier_hidden_size,
-            n_classes=config.num_lemmas,
+            n_classes=len(config.id2lemma_rule),
             activation=config.activation,
             dropout=config.dropout
         )
         self.morph_feats_classifier = MlpClassifier(
             input_size=embedding_size,
             hidden_size=config.morphology_classifier_hidden_size,
-            n_classes=config.num_morph_feats,
+            n_classes=len(config.id2morph_feats),
             activation=config.activation,
             dropout=config.dropout
         )
         self.dependency_classifier = DependencyClassifier(
             input_size=embedding_size,
             hidden_size=config.dependency_classifier_hidden_size,
-            n_rels_ud=config.num_rels_ud,
-            n_rels_eud=config.num_rels_eud,
+            n_rels_ud=len(config.id2rel_ud),
+            n_rels_eud=len(config.id2rel_eud),
             activation=config.activation,
             dropout=config.dropout
         )
         self.misc_classifier = MlpClassifier(
             input_size=embedding_size,
             hidden_size=config.misc_classifier_hidden_size,
-            n_classes=config.num_miscs,
+            n_classes=len(config.id2misc),
             activation=config.activation,
             dropout=config.dropout
         )
         self.deepslot_classifier = MlpClassifier(
             input_size=embedding_size,
             hidden_size=config.deepslot_classifier_hidden_size,
-            n_classes=config.num_deepslots,
+            n_classes=len(config.id2deepslot),
             activation=config.activation,
             dropout=config.dropout
         )
         self.semclass_classifier = MlpClassifier(
             input_size=embedding_size,
             hidden_size=config.semclass_classifier_hidden_size,
-            n_classes=config.num_semclasses,
+            n_classes=len(config.id2semclass),
             activation=config.activation,
             dropout=config.dropout
         )

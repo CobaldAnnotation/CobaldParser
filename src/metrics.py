@@ -42,7 +42,6 @@ def compute_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
     deepslot_f1 = f1_score(preds[6].flatten(), labels[6].flatten(), average='macro')
     semclass_f1 = f1_score(preds[7].flatten(), labels[7].flatten(), average='macro')
     return {
-        "eval_loss": 0.0,
         "null_f1": null_f1,
         "lemma_f1": lemma_f1,
         "morphology_f1": morph_f1,

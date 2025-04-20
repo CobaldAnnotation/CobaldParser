@@ -100,8 +100,7 @@ if __name__ == "__main__":
 
     dataset_dict = load_dataset(
         custom_args.dataset_path,
-        name=custom_args.dataset_config_name,
-        trust_remote_code=True
+        name=custom_args.dataset_config_name
     )
     dataset_dict = preprocess(dataset_dict)
 

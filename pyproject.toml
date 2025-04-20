@@ -12,9 +12,11 @@ dependencies = [
     "datasets>=3.4.0",
     "accelerate>=0.26.0",
     "scikit-learn",
+    "nltk>=3.9.1"
 ]
 
 [project.optional-dependencies]
 test = [
-    "pytest"
+    "pytest",
+    "pytest-mock"
 ]

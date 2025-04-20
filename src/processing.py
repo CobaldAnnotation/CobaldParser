@@ -235,8 +235,8 @@ def collate_with_padding(batches: list[dict], padding_value: int = -100) -> dict
     counting_masks_batched = stack_padded('counting_mask')
     lemma_rules_batched = stack_padded('lemma_rules')
     morph_feats_batched = stack_padded('morph_feats')
-    syntax_ud_batched = collate_syntax('ud_arcs_from', 'ud_arcs_to', 'ud_deprels')
-    syntax_eud_batched = collate_syntax('eud_arcs_from', 'eud_arcs_to', 'eud_deprels')
+    deps_ud_batched = collate_syntax('ud_arcs_from', 'ud_arcs_to', 'ud_deprels')
+    deps_eud_batched = collate_syntax('eud_arcs_from', 'eud_arcs_to', 'eud_deprels')
     miscs_batched = stack_padded('miscs')
     deepslots_batched = stack_padded('deepslots')
     semclasses_batched = stack_padded('semclasses')
@@ -246,8 +246,8 @@ def collate_with_padding(batches: list[dict], padding_value: int = -100) -> dict
         "counting_mask": maybe_none(counting_masks_batched),
         "lemma_rules": maybe_none(lemma_rules_batched),
         "morph_feats": maybe_none(morph_feats_batched),
-        "syntax_ud": maybe_none(syntax_ud_batched),
-        "syntax_eud": maybe_none(syntax_eud_batched),
+        "deps_ud": maybe_none(deps_ud_batched),
+        "deps_eud": maybe_none(deps_eud_batched),
         "miscs": maybe_none(miscs_batched),
         "deepslots": maybe_none(deepslots_batched),
         "semclasses": maybe_none(semclasses_batched),

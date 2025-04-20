@@ -26,8 +26,8 @@ class CobaldParserOutput(ModelOutput):
     counting_mask: LongTensor = None
     lemma_rules: LongTensor = None
     morph_feats: LongTensor = None
-    syntax_ud: LongTensor = None
-    syntax_eud: LongTensor = None
+    deps_ud: LongTensor = None
+    deps_eud: LongTensor = None
     miscs: LongTensor = None
     deepslots: LongTensor = None
     semclasses: LongTensor = None
@@ -103,8 +103,8 @@ class CobaldParser(PreTrainedModel):
         counting_mask: LongTensor = None,
         lemma_rules: LongTensor = None,
         morph_feats: LongTensor = None,
-        syntax_ud: LongTensor = None,
-        syntax_eud: LongTensor = None,
+        deps_ud: LongTensor = None,
+        deps_eud: LongTensor = None,
         miscs: LongTensor = None,
         deepslots: LongTensor = None,
         semclasses: LongTensor = None,
@@ -144,8 +144,8 @@ class CobaldParser(PreTrainedModel):
         # Mask nulls for basic UD and don't mask for E-UD.
         deps_output = self.dependency_classifier(
             embeddings,
-            syntax_ud,
-            syntax_eud,
+            deps_ud,
+            deps_eud,
             mask_ud=(padding_mask & ~null_mask),
             mask_eud=padding_mask
         )
@@ -167,14 +167,14 @@ class CobaldParser(PreTrainedModel):
         )
 
         return CobaldParserOutput(
+            loss=loss,
             words=words_with_nulls,
             counting_mask=null_output['preds'],
             lemma_rules=lemma_output['preds'],
             morph_feats=morph_feats_output['preds'],
-            syntax_ud=deps_output['preds_ud'],
-            syntax_eud=deps_output['preds_eud'],
+            deps_ud=deps_output['preds_ud'],
+            deps_eud=deps_output['preds_eud'],
             miscs=misc_output['preds'],
             deepslots=deepslot_output['preds'],
-            semclasses=semclass_output['preds'],
-            loss=loss
+            semclasses=semclass_output['preds']
         )

@@ -1,8 +1,9 @@
 import os
 from typing import override
 
+from torch.optim import AdamW
 from datasets import load_dataset
-from transformers import HfArgumentParser, TrainingArguments, Trainer
+from transformers import HfArgumentParser, TrainingArguments, Trainer, TrainerCallback
 from transformers.modelcard import parse_log_history
 from huggingface_hub import ModelCard, ModelCardData, EvalResult
 
@@ -93,6 +94,97 @@ class CustomTrainer(Trainer):
         model_card_filepath = os.path.join(self.args.output_dir, "README.md")
         card.save(model_card_filepath)
 
+    @override
+    def create_optimizer(self):
+        # Implement discriminative‐finetuning.
+        # NOTE: it breaks multiple CLI features like `--fp16` and `--fsdp`, but
+        # we don't need them so far anyway...
+
+        if self.optimizer is not None:
+            return self.optimizer
+        
+        base_lr = self.args.learning_rate
+        decay = self.args.weight_decay
+        layer_decay = 0.95
+        optimizer_grouped_parameters = []
+
+        layers = self.model.encoder.get_transformer_layers()
+
+        # Per‐layer parameter groups with decayed LR
+        for idx, layer in enumerate(layers):
+            lr = base_lr * (layer_decay ** (len(layers) - idx - 1))
+            optimizer_grouped_parameters.append({
+                "params": layer.parameters(),
+                "lr": lr,
+                "weight_decay": decay
+            })
+        # Add embeddings with the smallest LR
+        embeddings = self.model.encoder.get_embeddings()
+        smallest_lr = base_lr * (layer_decay ** len(layers))
+        optimizer_grouped_parameters.append({
+            "params": embeddings.parameters(),
+            "lr": smallest_lr,
+            "weight_decay": decay
+        })
+
+        # Add classifier with the base LR
+        classifiers_params = [
+            *self.model.null_classifier.parameters(),
+            *self.model.lemma_rule_classifier.parameters(),
+            *self.model.morph_feats_classifier.parameters(),
+            *self.model.dependency_classifier.parameters(),
+            *self.model.misc_classifier.parameters(),
+            *self.model.deepslot_classifier.parameters(),
+            *self.model.semclass_classifier.parameters()
+        ]
+        optimizer_grouped_parameters.append({
+            "params": classifiers_params,
+            "lr": base_lr,
+            "weight_decay": decay
+        })
+
+        self.optimizer = AdamW(
+            optimizer_grouped_parameters,
+            lr=base_lr,
+            betas=(self.args.adam_beta1, self.args.adam_beta2),
+            eps=self.args.adam_epsilon
+        )
+        return self.optimizer
+
+
+class GradualUnfreezeCallback(TrainerCallback):
+    """Unfreeze one encoder layer per epoch, deepest first."""
+
+    def __init__(self, warmup: int = 1, interval: int = 3):
+        self.warmup = warmup
+        self.interval = interval
+
+    def on_train_begin(self, args, state, control, model = None, **kwargs):
+        # Freeze encoder at start
+        for param in model.encoder.parameters():
+            param.requires_grad = False
+
+    def on_epoch_begin(self, args, state, control, model = None, **kwargs):
+        epoch = int(state.epoch)
+        
+        # Keep encoder frozen during warmup
+        if epoch < self.warmup:
+            return
+        
+        layers = model.encoder.get_transformer_layers()
+        top_layer_idx = len(layers) - 1
+        last_frozen_layer_idx = top_layer_idx - epoch * self.interval
+
+        # Gradually unfreeze layers from top to bottom or unfreeze encoder entirely
+        # (e.g. including the embeddings) if all layers are already unfreezed.
+        if last_frozen_layer_idx < 0:
+            for param in model.encoder.parameters():
+                param.requires_grad = True
+        else:
+            for layer in layers[top_layer_idx:last_frozen_layer_idx:-1]:
+                for param in layer.parameters():
+                    param.requires_grad = True
+
 
 if __name__ == "__main__":
     # Use HfArgumentParser with the built-in TrainingArguments class
@@ -130,13 +222,15 @@ if __name__ == "__main__":
     model = CobaldParser(model_config)
 
     # Create trainer and train the model.
+    unfreeze_callback = GradualUnfreezeCallback()
     trainer = CustomTrainer(
         model=model,
         args=training_args,
-        train_dataset=dataset_dict['train'],
-        eval_dataset=dataset_dict['validation'],
+        train_dataset=dataset_dict['train'].take(100),
+        eval_dataset=dataset_dict['validation'].take(100),
         data_collator=collate_with_padding,
-        compute_metrics=compute_metrics
+        compute_metrics=compute_metrics,
+        callbacks=[unfreeze_callback]
     )
     trainer.train(ignore_keys_for_eval=['words', 'sent_id', 'text'])
     # Save and push model to hub (if push_to_hub is set).

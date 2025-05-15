@@ -4,7 +4,7 @@ from transformers.modeling_outputs import ModelOutput
 from dataclasses import dataclass
 
 from .configuration import CobaldParserConfig
-from .encoder import MaskedLanguageModelEncoder
+from .encoder import WordTransformerEncoder
 from .mlp_classifier import MlpClassifier
 from .dependency_classifier import DependencyClassifier
 from .utils import (
@@ -41,7 +41,7 @@ class CobaldParser(PreTrainedModel):
     def __init__(self, config: CobaldParserConfig):
         super().__init__(config)
 
-        self.encoder = MaskedLanguageModelEncoder(
+        self.encoder = WordTransformerEncoder(
             model_name=config.encoder_model_name
         )
         embedding_size = self.encoder.get_embedding_size()

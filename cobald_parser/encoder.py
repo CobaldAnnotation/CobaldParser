@@ -5,15 +5,15 @@ from torch import Tensor, LongTensor
 from transformers import AutoTokenizer, AutoModel
 
 
-class MaskedLanguageModelEncoder(nn.Module):
+class WordTransformerEncoder(nn.Module):
     """
     Encodes sentences into word-level embeddings using a pretrained MLM transformer.
     """
     def __init__(self, model_name: str):
         super().__init__()
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self._tokenizer = AutoTokenizer.from_pretrained(model_name)
         # Model like BERT, RoBERTa, etc.
-        self.model = AutoModel.from_pretrained(model_name)
+        self._model = AutoModel.from_pretrained(model_name)
 
     def forward(self, words: list[list[str]]) -> Tensor:
         """
@@ -26,26 +26,26 @@ class MaskedLanguageModelEncoder(nn.Module):
         batch_size = len(words)
 
         # BPE tokenization: split words into subtokens, e.g. ['kidding'] -> ['▁ki', 'dding'].
-        subtokens = self.tokenizer(
+        subtokens = self._tokenizer(
             words,
             padding=True,
             truncation=True,
             is_split_into_words=True,
             return_tensors='pt'
         )
-        subtokens = subtokens.to(self.model.device)
+        subtokens = subtokens.to(self._model.device)
         # Index words from 1 and reserve 0 for special subtokens (e.g. <s>, </s>, padding, etc.).
         # Such numeration makes a following aggregation easier.
         words_ids = torch.stack([
             LongTensor(
                 [word_id + 1 if word_id is not None else 0 for word_id in subtokens.word_ids(batch_idx)],
-                device=self.model.device
+                device=self._model.device
             )
             for batch_idx in range(batch_size)
         ])
 
         # Run model and extract subtokens embeddings from the last layer.
-        subtokens_embeddings = self.model(**subtokens).last_hidden_state
+        subtokens_embeddings = self._model(**subtokens).last_hidden_state
 
         # Aggreate subtokens embeddings into words embeddings.
         # [batch_size, n_words, embedding_size]
@@ -70,7 +70,7 @@ class MaskedLanguageModelEncoder(nn.Module):
         words_embeddings = torch.zeros(
             size=(batch_size, n_words, embedding_size),
             dtype=subtokens_embeddings.dtype,
-            device=self.model.device
+            device=self._model.device
         )
         words_ids_expanded = words_ids.unsqueeze(-1).expand(batch_size, n_subtokens, embedding_size)
 
@@ -90,4 +90,12 @@ class MaskedLanguageModelEncoder(nn.Module):
 
     def get_embedding_size(self) -> int:
         """Returns the embedding size of the transformer model, e.g. 768 for BERT."""
-        return self.model.config.hidden_size
+        return self._model.config.hidden_size
+
+    def get_embeddings(self):
+        """Returns the embeddings model."""
+        return self._model.embeddings
+    
+    def get_transformer_layers(self):
+        """Returns the transformer model."""
+        return self._model.transformer.layer

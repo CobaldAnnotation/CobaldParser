@@ -1,7 +1,7 @@
 import os
 from typing import override
 
-from datasets import load_dataset, concatenate_datasets, DatasetDict
+from datasets import load_dataset
 from transformers import HfArgumentParser, TrainingArguments, Trainer
 from transformers.modelcard import parse_log_history
 from huggingface_hub import ModelCard, ModelCardData, EvalResult
@@ -28,12 +28,18 @@ This model parses a pre-tokenized CoNLL-U text and jointly labels each token wit
 ## Model Sources
 
 - **Repository:** https://github.com/CobaldAnnotation/CobaldParser
-- **Paper:** [coming soon]
+- **Paper:** https://dialogue-conf.org/wp-content/uploads/2025/04/BaiukIBaiukAPetrovaM.009.pdf
 - **Demo:** [coming soon]
 
 ## Citation
 
-[coming soon]
+@inproceedings{baiuk2025cobald,
+  title={CoBaLD Parser: Joint Morphosyntactic and Semantic Annotation},
+  author={Baiuk, Ilia and Baiuk, Alexandra and Petrova, Maria},
+  booktitle={Proceedings of the International Conference "Dialogue"},
+  volume={I},
+  year={2025}
+}
 """
 
 
@@ -78,7 +84,7 @@ class CustomTrainer(Trainer):
                 license='gpl-3.0',
                 metrics=['accuracy', 'f1'],
                 model_name=self.hub_model_id,
-                pipeline_tag='token-classification',
+                pipeline_tag='cobald-parsing', # Use the correct task name
                 tags=['pytorch']
             ),
             template_str=MODELCARD_TEMPLATE,
@@ -127,10 +133,11 @@ if __name__ == "__main__":
     trainer = CustomTrainer(
         model=model,
         args=training_args,
-        train_dataset=dataset_dict['train'].take(20),
-        eval_dataset=dataset_dict['validation'].take(100),
+        train_dataset=dataset_dict['train'],
+        eval_dataset=dataset_dict['validation'],
         data_collator=collate_with_padding,
         compute_metrics=compute_metrics
     )
     trainer.train(ignore_keys_for_eval=['words', 'sent_id', 'text'])
+    # Save and push model to hub (if push_to_hub is set).
     trainer.save_model()

@@ -14,7 +14,7 @@ nltk.download('punkt_tab')
 
 class ConlluTokenClassificationPipeline(Pipeline):
     def __init__(self, model, language, **kwargs):
-        super().__init__(model=model, framework='pt', **kwargs)
+        super().__init__(model=model, **kwargs)
         self.language = language
 
     @override

@@ -37,12 +37,22 @@ class CobaldParserConfig(PretrainedConfig):
         self.semclass_classifier_hidden_size = semclass_classifier_hidden_size
         self.activation = activation
         self.dropout = dropout
-        # Vocabulary
-        self.id2lemma_rule = id2lemma_rule
-        self.id2morph_feats = id2morph_feats
-        self.id2rel_ud = id2rel_ud
-        self.id2rel_eud = id2rel_eud
-        self.id2misc = id2misc
-        self.id2deepslot = id2deepslot
-        self.id2semclass = id2semclass
+        # Vocabulary.
+        # The config stores mappings as strings, so we have to convert them to int.
+        cast_keys_to_int = lambda id2label: {int(k): v for k, v in id2label.items()}
+        self.id2lemma_rule = cast_keys_to_int(id2lemma_rule)
+        self.id2morph_feats = cast_keys_to_int(id2morph_feats)
+        self.id2rel_ud = cast_keys_to_int(id2rel_ud)
+        self.id2rel_eud = cast_keys_to_int(id2rel_eud)
+        self.id2misc = cast_keys_to_int(id2misc)
+        self.id2deepslot = cast_keys_to_int(id2deepslot)
+        self.id2semclass = cast_keys_to_int(id2semclass)
+        # HACK: Tell HF hub about custom pipeline.
+        # It should not be hardcoded like this but other workaround are worse imo.
+        self.custom_pipelines = {
+            "cobald-parsing": {
+                "impl": "pipeline.ConlluTokenClassificationPipeline",
+                "pt": "CobaldParser",
+            }
+        }
         super().__init__(**kwargs)

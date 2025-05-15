@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from pipeline import ConlluTokenClassificationPipeline
+from cobald_parser.pipeline import ConlluTokenClassificationPipeline
 
 
 @pytest.fixture
@@ -81,7 +81,8 @@ def pipeline(mock_model):
     """Create the pipeline for testing"""
     return ConlluTokenClassificationPipeline(
         model=mock_model,
-        language='english'
+        language='english',
+        framework='pt'
     )
 
 

@@ -104,28 +104,10 @@ class CustomTrainer(Trainer):
             return self.optimizer
         
         base_lr = self.args.learning_rate
+        encoder_lr = base_lr / 5
         decay = self.args.weight_decay
-        layer_decay = 0.95
+        layer_decay = 0.9
         optimizer_grouped_parameters = []
-
-        layers = self.model.encoder.get_transformer_layers()
-
-        # Per‐layer parameter groups with decayed LR
-        for idx, layer in enumerate(layers):
-            lr = base_lr * (layer_decay ** (len(layers) - idx - 1))
-            optimizer_grouped_parameters.append({
-                "params": layer.parameters(),
-                "lr": lr,
-                "weight_decay": decay
-            })
-        # Add embeddings with the smallest LR
-        embeddings = self.model.encoder.get_embeddings()
-        smallest_lr = base_lr * (layer_decay ** len(layers))
-        optimizer_grouped_parameters.append({
-            "params": embeddings.parameters(),
-            "lr": smallest_lr,
-            "weight_decay": decay
-        })
 
         # Add classifier with the base LR
         classifiers_params = [
@@ -142,10 +124,28 @@ class CustomTrainer(Trainer):
             "lr": base_lr,
             "weight_decay": decay
         })
+        
+        # Per‐layer parameter groups with decaying LR
+        layers = self.model.encoder.get_transformer_layers()
+        for idx, layer in enumerate(layers):
+            lr = encoder_lr * (layer_decay ** (len(layers) - idx - 1))
+            optimizer_grouped_parameters.append({
+                "params": layer.parameters(),
+                "lr": lr,
+                "weight_decay": decay
+            })
+
+        # Add embeddings with the smallest LR
+        embeddings = self.model.encoder.get_embeddings()
+        smallest_lr = encoder_lr * (layer_decay ** len(layers))
+        optimizer_grouped_parameters.append({
+            "params": embeddings.parameters(),
+            "lr": smallest_lr,
+            "weight_decay": decay
+        })
 
         self.optimizer = AdamW(
             optimizer_grouped_parameters,
-            lr=base_lr,
             betas=(self.args.adam_beta1, self.args.adam_beta2),
             eps=self.args.adam_epsilon
         )
@@ -166,7 +166,7 @@ class GradualUnfreezeCallback(TrainerCallback):
 
     def on_epoch_begin(self, args, state, control, model = None, **kwargs):
         epoch = int(state.epoch)
-        
+
         # Keep encoder frozen during warmup
         if epoch < self.warmup:
             return

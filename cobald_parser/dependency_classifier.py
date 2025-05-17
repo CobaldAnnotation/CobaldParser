@@ -56,7 +56,7 @@ class DependencyHeadBase(nn.Module):
         s_rel = self.rel_attention(h_rel_head, h_rel_dep).permute(0, 2, 3, 1)
 
         # Calculate loss.
-        loss = torch.tensor(0.)
+        loss = 0.0
         if gold_arcs is not None:
             loss += self.calc_arc_loss(s_arc, gold_arcs)
             loss += self.calc_rel_loss(s_rel, gold_arcs)

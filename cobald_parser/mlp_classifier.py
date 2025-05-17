@@ -34,7 +34,7 @@ class MlpClassifier(nn.Module):
     def forward(self, embeddings: Tensor, labels: LongTensor = None) -> dict:
         logits = self.classifier(embeddings)
         # Calculate loss.
-        loss = torch.tensor(0.)
+        loss = 0.0
         if labels is not None:
             # Reshape tensors to match expected dimensions
             loss = self.cross_entropy(

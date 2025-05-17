@@ -93,10 +93,17 @@ class WordTransformerEncoder(nn.Module):
         """Returns the embedding size of the transformer model, e.g. 768 for BERT."""
         return self._model.config.hidden_size
 
-    def get_embeddings(self):
+    def get_embeddings_layer(self):
         """Returns the embeddings model."""
         return self._model.embeddings
-    
-    def get_transformer_layers(self):
-        """Returns the transformer model."""
-        return self._model.transformer.layer
+        
+    def get_transformer_layers(self) -> list[nn.Module]:
+        """
+        Return a flat list of all transformer-*block* layers, excluding embeddings/poolers, etc.
+        """
+        layers = []
+        for sub in self._model.modules():
+            # find all ModuleLists (these always hold the actual block layers)
+            if isinstance(sub, nn.ModuleList):
+                layers.extend(list(sub))
+        return layers

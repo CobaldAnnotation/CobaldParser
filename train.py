@@ -136,7 +136,7 @@ class CustomTrainer(Trainer):
             })
 
         # Add embeddings with the smallest LR
-        embeddings = self.model.encoder.get_embeddings()
+        embeddings = self.model.encoder.get_embeddings_layer()
         smallest_lr = encoder_lr * (layer_decay ** len(layers))
         optimizer_grouped_parameters.append({
             "params": embeddings.parameters(),

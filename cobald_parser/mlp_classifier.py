@@ -28,7 +28,7 @@ class MlpClassifier(nn.Module):
             nn.Linear(hidden_size, n_classes)
         )
         if class_weights is not None:
-            class_weights = LongTensor(class_weights)
+            class_weights = torch.tensor(class_weights, dtype=torch.long)
         self.cross_entropy = nn.CrossEntropyLoss(weight=class_weights)
 
     def forward(self, embeddings: Tensor, labels: LongTensor = None) -> dict:

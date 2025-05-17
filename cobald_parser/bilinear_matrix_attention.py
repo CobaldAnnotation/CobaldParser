@@ -48,11 +48,15 @@ class BilinearMatrixAttention(nn.Module):
             matrix_2_size += 1
 
         if n_labels == 1:
-            self._weight_matrix = Parameter(Tensor(matrix_1_size, matrix_2_size))
+            self._weight_matrix = Parameter(
+                torch.zeros((matrix_1_size, matrix_2_size), dtype=torch.float32)
+            )
         else:
-            self._weight_matrix = Parameter(Tensor(n_labels, matrix_1_size, matrix_2_size))
+            self._weight_matrix = Parameter(
+                torch.zeros((n_labels, matrix_1_size, matrix_2_size), dtype=torch.float32)
+            )
 
-        self._bias = Parameter(Tensor(1))
+        self._bias = Parameter(torch.ones(1, dtype=torch.float32))
         self._use_input_biases = use_input_biases
         self.reset_parameters()
 

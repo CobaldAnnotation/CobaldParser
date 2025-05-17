@@ -37,8 +37,9 @@ class WordTransformerEncoder(nn.Module):
         # Index words from 1 and reserve 0 for special subtokens (e.g. <s>, </s>, padding, etc.).
         # Such numeration makes a following aggregation easier.
         words_ids = torch.stack([
-            LongTensor(
+            torch.tensor(
                 [word_id + 1 if word_id is not None else 0 for word_id in subtokens.word_ids(batch_idx)],
+                dtype=torch.long,
                 device=self._model.device
             )
             for batch_idx in range(batch_size)

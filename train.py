@@ -226,8 +226,8 @@ if __name__ == "__main__":
     trainer = CustomTrainer(
         model=model,
         args=training_args,
-        train_dataset=dataset_dict['train'].take(100),
-        eval_dataset=dataset_dict['validation'].take(100),
+        train_dataset=dataset_dict['train'],
+        eval_dataset=dataset_dict['validation'],
         data_collator=collate_with_padding,
         compute_metrics=compute_metrics,
         callbacks=[unfreeze_callback]

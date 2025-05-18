@@ -8,8 +8,28 @@ from transformers.modelcard import parse_log_history
 from huggingface_hub import ModelCard, ModelCardData, EvalResult
 
 from cobald_parser import CobaldParserConfig, CobaldParser
-from src.processing import preprocess, collate_with_padding
+from src.processing import (
+    preprocess,
+    collate_with_padding,
+    SENT_ID,
+    TEXT,
+    WORD,
+    LEMMA_RULE,
+    JOINT_FEATS,
+    UD_DEPREL,
+    EUD_DEPREL,
+    MISC,
+    SEMCLASS,
+    DEEPSLOT
+)
 from src.metrics import compute_metrics
+
+
+def export_vocabulary(train_dataset_features, config):
+    for column in [LEMMA_RULE, JOINT_FEATS, UD_DEPREL, EUD_DEPREL, MISC, DEEPSLOT, SEMCLASS]:
+        if column in train_dataset_features:
+            labels = train_dataset_features[column].feature.names
+            config.vocabulary[column] = dict(enumerate(labels))
 
 
 MODELCARD_TEMPLATE = """
@@ -110,15 +130,20 @@ class CustomTrainer(Trainer):
         optimizer_grouped_parameters = []
 
         # Add classifier with the base LR
-        classifiers_params = [
-            *self.model.null_classifier.parameters(),
-            *self.model.lemma_rule_classifier.parameters(),
-            *self.model.morph_feats_classifier.parameters(),
-            *self.model.dependency_classifier.parameters(),
-            *self.model.misc_classifier.parameters(),
-            *self.model.deepslot_classifier.parameters(),
-            *self.model.semclass_classifier.parameters()
-        ]
+        classifiers_params = []
+        classifiers_params.extend(self.model.null_classifier.parameters())
+        if hasattr(self.model, "lemma_rule_classifier"):
+            classifiers_params.extend(self.model.lemma_rule_classifier.parameters())
+        if hasattr(self.model, "morphology_classifier"):
+            classifiers_params.extend(self.model.morphology_classifier.parameters())
+        if hasattr(self.model, "dependency_classifier"):
+            classifiers_params.extend(self.model.dependency_classifier.parameters())
+        if hasattr(self.model, "misc_classifier"):
+            classifiers_params.extend(self.model.misc_classifier.parameters())
+        if hasattr(self.model, "deepslot_classifier"):
+            classifiers_params.extend(self.model.deepslot_classifier.parameters())
+        if hasattr(self.model, "semclass_classifier"):
+            classifiers_params.extend(self.model.semclass_classifier.parameters())
         optimizer_grouped_parameters.append({
             "params": classifiers_params,
             "lr": base_lr,
@@ -189,9 +214,9 @@ class GradualUnfreezeCallback(TrainerCallback):
 if __name__ == "__main__":
     # Use HfArgumentParser with the built-in TrainingArguments class
     parser = HfArgumentParser(TrainingArguments)
-    parser.add_argument('--dataset_path', required=True)
-    parser.add_argument('--dataset_config_name', required=True)
     parser.add_argument('--model_config', required=True)
+    parser.add_argument('--dataset_path', required=True)
+    parser.add_argument('--dataset_config_name')
 
     # Parse command-line arguments.
     training_args, custom_args = parser.parse_args_into_dataclasses()
@@ -204,20 +229,8 @@ if __name__ == "__main__":
 
     # Create and configure model.
     model_config = CobaldParserConfig.from_json_file(custom_args.model_config)
-    # Map labels and to ids based on dataset features.
-    id2label_kwargs = {}
-    for config_arg, feature_name in [
-        ("id2lemma_rule", "lemma_rules"),
-        ("id2morph_feats", "morph_feats"),
-        ("id2rel_ud", "ud_deprels"),
-        ("id2rel_eud", "eud_deprels"),
-        ("id2misc", "miscs"),
-        ("id2deepslot", "deepslots"),
-        ("id2semclass", "semclasses")
-    ]:
-        feature = dataset_dict['train'].features[feature_name].feature
-        id2label_kwargs[config_arg] = dict(enumerate(feature.names))
-    model_config.update(id2label_kwargs)
+    # Export vocabulary to config (as it must be saved along the model).
+    export_vocabulary(dataset_dict['train'].features, model_config)
 
     model = CobaldParser(model_config)
 
@@ -232,6 +245,6 @@ if __name__ == "__main__":
         compute_metrics=compute_metrics,
         callbacks=[unfreeze_callback]
     )
-    trainer.train(ignore_keys_for_eval=['words', 'sent_id', 'text'])
+    trainer.train(ignore_keys_for_eval=[WORD, SENT_ID, TEXT])
     # Save and push model to hub (if push_to_hub is set).
     trainer.save_model()

@@ -18,8 +18,37 @@ from src.lemmatize_helper import construct_lemma_rule
 from cobald_parser.utils import pad_sequences
 
 
-ROOT = '0'
+ROOT_HEAD = '0'
 NULL = "#NULL"
+
+# Sentence metadata
+SENT_ID = "sent_id"
+TEXT = "text"
+
+# Fields
+ID = "id"
+WORD = "word"
+LEMMA = "lemma"
+UPOS = "upos"
+XPOS = "xpos"
+FEATS = "feats"
+HEAD = "head"
+DEPREL = "deprel"
+DEPS = "deps"
+MISC = "misc"
+DEEPSLOT = "deepslot"
+SEMCLASS = "semclass"
+
+# Updated fields
+COUNTING_MASK = "counting_mask"
+LEMMA_RULE = "lemma_rule"
+JOINT_FEATS = "joint_feats"
+UD_ARC_FROM = "ud_arc_from"
+UD_ARC_TO = "ud_arc_to"
+UD_DEPREL = "ud_deprel"
+EUD_ARC_FROM = "eud_arc_from"
+EUD_ARC_TO = "eud_arc_to"
+EUD_DEPREL = "eud_deprel"
 
 
 def remove_range_tokens(sentence: dict) -> dict:
@@ -29,11 +58,11 @@ def remove_range_tokens(sentence: dict) -> dict:
     def is_range_id(idtag: str) -> bool:
         return '-' in idtag
     
-    sentence_length = len(sentence['ids'])
+    sentence_length = len(sentence[ID])
     return {
         key: [values[i]
               for i in range(sentence_length)
-              if not is_range_id(sentence['ids'][i])]
+              if not is_range_id(sentence[ID][i])]
         for key, values in sentence.items()
         if values is not None and isinstance(values, list)
     }
@@ -65,7 +94,7 @@ def renumerate_heads(ids: list[str], arcs_from: list[str], heads: list[str]) -> 
 
     arcs_to = [
         old2new_id[head]
-        if head != ROOT else token_index
+        if head != ROOT_HEAD else token_index
         for token_index, head in zip(arcs_from, heads, strict=True)
     ]
     return arcs_to
@@ -79,55 +108,54 @@ def transform_fields(sentence: dict) -> dict:
      * encode ud syntax into a single 2d matrix,
      * same for e-ud syntax.
     """
+    result = {}
 
-    counting_mask = build_counting_mask(sentence["words"])
+    result[COUNTING_MASK] = build_counting_mask(sentence[WORD])
 
-    lemma_rules = [
-        construct_lemma_rule(word, lemma)
-        if lemma is not None else None
-        for word, lemma in zip(sentence["words"], sentence["lemmas"], strict=True)
-    ]
+    if LEMMA in sentence:
+        result[LEMMA_RULE] = [
+            construct_lemma_rule(word, lemma)
+            if lemma is not None else None
+            for word, lemma in zip(sentence[WORD], sentence[LEMMA], strict=True)
+        ]
     
-    morph_feats = [
-        f"{upos}#{xpos}#{feats}"
-        if (upos is not None or xpos is not None or feats is not None) else None
-        for upos, xpos, feats in zip(sentence["upos"], sentence["xpos"], sentence["feats"], strict=True)
-    ]
+    if UPOS in sentence or XPOS in sentence or FEATS in sentence:
+        result[JOINT_FEATS] = [
+            f"{upos}#{xpos}#{feats}"
+            if (upos is not None or xpos is not None or feats is not None) else None
+            for upos, xpos, feats in zip(sentence[UPOS], sentence[XPOS], sentence[FEATS], strict=True)
+        ]
 
     # Basic syntax.
-    ud_arcs_from, ud_heads, ud_deprels = zip(
-        *[
-            (token_index, str(head), rel)
-            for token_index, (head, rel) in enumerate(zip(sentence["heads"], sentence["deprels"], strict=True))
-            if head is not None
-        ],
-        strict=True
-    )
-    ud_arcs_to = renumerate_heads(sentence["ids"], ud_arcs_from, ud_heads)
-    
-    # Enhanced syntax.
-    eud_arcs_from, eud_heads, eud_deprels = zip(
-        *[
-            (token_index, head, rel)
-            for token_index, deps in enumerate(sentence["deps"])
-            for head, rel in json.loads(deps).items()
-            if deps is not None
-        ],
-        strict=True
-    )
-    eud_arcs_to = renumerate_heads(sentence["ids"], eud_arcs_from, eud_heads)
+    if HEAD in sentence and DEPREL in sentence:
+        ud_arcs_from, ud_heads, ud_deprels = zip(
+            *[
+                (token_index, str(head), rel)
+                for token_index, (head, rel) in enumerate(zip(sentence[HEAD], sentence[DEPREL], strict=True))
+                if head is not None
+            ],
+            strict=True
+        )
+        result[UD_ARC_FROM] = ud_arcs_from
+        result[UD_ARC_TO] = renumerate_heads(sentence[ID], ud_arcs_from, ud_heads)
+        result[UD_DEPREL] = ud_deprels
 
-    return {
-        "counting_mask": counting_mask,
-        "lemma_rules": lemma_rules,
-        "morph_feats": morph_feats,
-        "ud_arcs_from": ud_arcs_from,
-        "ud_arcs_to": ud_arcs_to,
-        "ud_deprels": ud_deprels,
-        "eud_arcs_from": eud_arcs_from,
-        "eud_arcs_to": eud_arcs_to,
-        "eud_deprels": eud_deprels
-    }
+    # Enhanced syntax.
+    if DEPS in sentence:
+        eud_arcs_from, eud_heads, eud_deprels = zip(
+            *[
+                (token_index, head, rel)
+                for token_index, deps in enumerate(sentence[DEPS])
+                for head, rel in json.loads(deps).items()
+                if deps is not None
+            ],
+            strict=True
+        )
+        result[EUD_ARC_FROM] = eud_arcs_from
+        result[EUD_ARC_TO] = renumerate_heads(sentence[ID], eud_arcs_from, eud_heads)
+        result[EUD_DEPREL] = eud_deprels
+
+    return result
 
 
 def extract_unique_labels(dataset, column_name) -> list[str]:
@@ -142,34 +170,49 @@ def extract_unique_labels(dataset, column_name) -> list[str]:
 def build_schema_with_class_labels(dataset: Dataset) -> Features:
     """Update the schema to use ClassLabel for specified columns."""
 
-    max_null_count = max(itertools.chain.from_iterable(dataset["counting_mask"]))
-    # Extract unique labels for each column that needs to be ClassLabel.
-    lemma_rule_tagset = extract_unique_labels(dataset, "lemma_rules")
-    morph_feats_tagset = extract_unique_labels(dataset, "morph_feats")
-    ud_deprels_tagset = extract_unique_labels(dataset, "ud_deprels")
-    eud_deprels_tagset = extract_unique_labels(dataset, "eud_deprels")
-    misc_tagset = extract_unique_labels(dataset, "miscs")
-    deepslot_tagset = extract_unique_labels(dataset, "deepslots")
-    semclass_tagset = extract_unique_labels(dataset, "semclasses")
-
-    # Define updated features schema
+    # Updated features schema
     features = Features({
-        "words": Sequence(Value("string")),
-        "counting_mask": Sequence(ClassLabel(num_classes=max_null_count + 1)),
-        "lemma_rules": Sequence(ClassLabel(names=lemma_rule_tagset)),
-        "morph_feats": Sequence(ClassLabel(names=morph_feats_tagset)),
-        "ud_arcs_from": Sequence(Value('int32')),
-        "ud_arcs_to": Sequence(Value('int32')),
-        "ud_deprels": Sequence(ClassLabel(names=ud_deprels_tagset)),
-        "eud_arcs_from": Sequence(Value('int32')),
-        "eud_arcs_to": Sequence(Value('int32')),
-        "eud_deprels": Sequence(ClassLabel(names=eud_deprels_tagset)),
-        "miscs": Sequence(ClassLabel(names=misc_tagset)),
-        "deepslots": Sequence(ClassLabel(names=deepslot_tagset)),
-        "semclasses": Sequence(ClassLabel(names=semclass_tagset)),
-        "sent_id": Value("string"),
-        "text": Value("string")
+        SENT_ID: Value("string"),
+        TEXT: Value("string"),
+        WORD: Sequence(Value("string"))
     })
+
+    max_null_count = max(itertools.chain.from_iterable(dataset[COUNTING_MASK]))
+    features[COUNTING_MASK] = Sequence(ClassLabel(num_classes=max_null_count + 1))
+
+    # Extract unique labels for each column that needs to be ClassLabel.
+    if LEMMA_RULE in dataset.column_names:
+        lemma_rule_tagset = extract_unique_labels(dataset, LEMMA_RULE)
+        features[LEMMA_RULE] = Sequence(ClassLabel(names=lemma_rule_tagset))
+
+    if JOINT_FEATS in dataset.column_names:
+        joint_feats_tagset = extract_unique_labels(dataset, JOINT_FEATS)
+        features[JOINT_FEATS] = Sequence(ClassLabel(names=joint_feats_tagset))
+
+    if UD_DEPREL in dataset.column_names:
+        features[UD_ARC_FROM] = Sequence(Value('int32'))
+        features[UD_ARC_TO] = Sequence(Value('int32'))
+        ud_deprels_tagset = extract_unique_labels(dataset, UD_DEPREL)
+        features[UD_DEPREL] = Sequence(ClassLabel(names=ud_deprels_tagset))
+
+    if EUD_DEPREL in dataset.column_names:
+        features[EUD_ARC_FROM] = Sequence(Value('int32'))
+        features[EUD_ARC_TO] = Sequence(Value('int32'))
+        eud_deprels_tagset = extract_unique_labels(dataset, EUD_DEPREL)
+        features[EUD_DEPREL] = Sequence(ClassLabel(names=eud_deprels_tagset))
+
+    if MISC in dataset.column_names:
+        misc_tagset = extract_unique_labels(dataset, MISC)
+        features[MISC] = Sequence(ClassLabel(names=misc_tagset))
+
+    if DEEPSLOT in dataset.column_names:
+        deepslot_tagset = extract_unique_labels(dataset, DEEPSLOT)
+        features[DEEPSLOT] = Sequence(ClassLabel(names=deepslot_tagset))
+
+    if SEMCLASS in dataset.column_names:
+        semclass_tagset = extract_unique_labels(dataset, SEMCLASS)
+        features[SEMCLASS] = Sequence(ClassLabel(names=semclass_tagset))
+
     return features
 
 
@@ -187,20 +230,23 @@ def replace_none(example: dict, value: int) -> dict:
 def preprocess(dataset_dict: DatasetDict, none_value: int = -100) -> Dataset:
     # Remove range tokens.
     dataset_dict = dataset_dict.map(remove_range_tokens)
+
     # Transform fields.
+    dataset_column_names = {
+        column
+        for columns in dataset_dict.column_names.values()
+        for column in columns
+    }
+    columns_to_remove = [ID, LEMMA, UPOS, XPOS, FEATS, HEAD, DEPREL, DEPS]
     dataset_dict = dataset_dict.map(
         transform_fields,
         remove_columns=[
-            'ids',
-            'lemmas',
-            'upos',
-            'xpos',
-            'feats',
-            'heads',
-            'deprels',
-            'deps'
+            column
+            for column in columns_to_remove
+            if column in dataset_column_names
         ]
     )
+
     # Encode labels (str -> int).
     # FIXME: Should be a trainig schema with OOV and special handling in evaluation
     # but it makes things too complicated.
@@ -231,26 +277,43 @@ def collate_with_padding(batches: list[dict], padding_value: int = -100) -> dict
 
     def maybe_none(labels: LongTensor) -> LongTensor | None:
         return None if labels.max() == padding_value or labels.numel() == 0 else labels
-
-    counting_masks_batched = stack_padded('counting_mask')
-    lemma_rules_batched = stack_padded('lemma_rules')
-    morph_feats_batched = stack_padded('morph_feats')
-    deps_ud_batched = collate_syntax('ud_arcs_from', 'ud_arcs_to', 'ud_deprels')
-    deps_eud_batched = collate_syntax('eud_arcs_from', 'eud_arcs_to', 'eud_deprels')
-    miscs_batched = stack_padded('miscs')
-    deepslots_batched = stack_padded('deepslots')
-    semclasses_batched = stack_padded('semclasses')
-
-    return {
-        "words": gather_column('words'),
-        "counting_mask": maybe_none(counting_masks_batched),
-        "lemma_rules": maybe_none(lemma_rules_batched),
-        "morph_feats": maybe_none(morph_feats_batched),
-        "deps_ud": maybe_none(deps_ud_batched),
-        "deps_eud": maybe_none(deps_eud_batched),
-        "miscs": maybe_none(miscs_batched),
-        "deepslots": maybe_none(deepslots_batched),
-        "semclasses": maybe_none(semclasses_batched),
-        "sent_ids": gather_column('sent_id'),
-        "texts": gather_column('text')
+    
+    result = {
+        "words": gather_column(WORD),
+        "sent_ids": gather_column(SENT_ID),
+        "texts": gather_column(TEXT)
     }
+
+    counting_masks_batched = stack_padded(COUNTING_MASK)
+    result["counting_masks"] = maybe_none(counting_masks_batched)
+
+    columns = {column for batch in batches for column in batch}
+    if LEMMA_RULE in columns:
+        lemma_rules_batched = stack_padded(LEMMA_RULE)
+        result["lemma_rules"] = maybe_none(lemma_rules_batched)
+
+    if JOINT_FEATS in columns:
+        joint_feats_batched = stack_padded(JOINT_FEATS)
+        result["joint_feats"] = maybe_none(joint_feats_batched)
+
+    if UD_DEPREL in columns:
+        deps_ud_batched = collate_syntax(UD_ARC_FROM, UD_ARC_TO, UD_DEPREL)
+        result["deps_ud"] = maybe_none(deps_ud_batched)
+
+    if EUD_DEPREL in columns:
+        deps_eud_batched = collate_syntax(EUD_ARC_FROM, EUD_ARC_TO, EUD_DEPREL)
+        result["deps_eud"] = maybe_none(deps_eud_batched)
+
+    if MISC in columns:
+        miscs_batched = stack_padded(MISC)
+        result["miscs"] = maybe_none(miscs_batched)
+
+    if DEEPSLOT in columns:
+        deepslots_batched = stack_padded(DEEPSLOT)
+        result["deepslots"] = maybe_none(deepslots_batched)
+
+    if SEMCLASS in columns:
+        semclasses_batched = stack_padded(SEMCLASS)
+        result["semclasses"] = maybe_none(semclasses_batched)
+
+    return result

@@ -3,7 +3,12 @@ from typing import override
 
 from torch.optim import AdamW
 from datasets import load_dataset
-from transformers import HfArgumentParser, TrainingArguments, Trainer, TrainerCallback
+from transformers import (
+    HfArgumentParser,
+    TrainingArguments,
+    Trainer,
+    TrainerCallback
+)
 from transformers.modelcard import parse_log_history
 from huggingface_hub import ModelCard, ModelCardData, EvalResult
 
@@ -11,9 +16,7 @@ from cobald_parser import CobaldParserConfig, CobaldParser
 from src.processing import (
     preprocess,
     collate_with_padding,
-    SENT_ID,
-    TEXT,
-    WORD,
+    COUNTING_MASK,
     LEMMA_RULE,
     JOINT_FEATS,
     UD_DEPREL,
@@ -232,6 +235,21 @@ if __name__ == "__main__":
     # Export vocabulary to config (as it must be saved along the model).
     export_vocabulary(dataset_dict['train'].features, model_config)
 
+    # Manually set some parameters for this specific workflow to work.
+    training_args.remove_unused_columns = False
+    training_args.label_names = ["counting_masks"]
+    for dataset_column, parser_input in (
+        (LEMMA_RULE, "lemma_rules"),
+        (JOINT_FEATS, "joint_feats"),
+        (UD_DEPREL, "deps_ud"),
+        (EUD_DEPREL, "deps_eud"),
+        (MISC, "miscs"),
+        (DEEPSLOT, "deepslots"),
+        (SEMCLASS, "semclasses")
+    ):
+        if dataset_column in model_config.vocabulary:
+            training_args.label_names.append(parser_input)
+
     model = CobaldParser(model_config)
 
     # Create trainer and train the model.
@@ -242,9 +260,10 @@ if __name__ == "__main__":
         train_dataset=dataset_dict['train'],
         eval_dataset=dataset_dict['validation'],
         data_collator=collate_with_padding,
-        compute_metrics=compute_metrics,
+        # Wth? See notes at compute_metrics.
+        compute_metrics=lambda x: compute_metrics(x, training_args.label_names),
         callbacks=[unfreeze_callback]
     )
-    trainer.train(ignore_keys_for_eval=[WORD, SENT_ID, TEXT])
+    trainer.train(ignore_keys_for_eval=["words", "sent_ids", "texts"])
     # Save and push model to hub (if push_to_hub is set).
     trainer.save_model()

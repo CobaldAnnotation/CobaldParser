@@ -39,7 +39,7 @@ MISC = "misc"
 DEEPSLOT = "deepslot"
 SEMCLASS = "semclass"
 
-# Updated fields
+# Transformed fields
 COUNTING_MASK = "counting_mask"
 LEMMA_RULE = "lemma_rule"
 JOINT_FEATS = "joint_feats"

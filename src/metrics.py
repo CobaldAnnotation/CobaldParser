@@ -29,25 +29,79 @@ def jaccard_score_vectorwise(pred_arcs: np.ndarray, gold_arcs: np.ndarray) -> fl
     return len(intersection) / len(union)
 
 
-def compute_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
+# EvalPrediction have no information about preds/labels keys (why not just
+# preserve dicts??). As a result, we cannot distinguish between tuples without
+# external context, i.e. if `preds` is a tuple of length 3, it can contain
+# (lemma rules, ud syntax, miscs) or (lemma rules, morph, semclass) - there is
+# no way to find out which of these configurations we are dealing with and
+# what scores we should calculate.
+# So here is a workaround: pass extra `columns` that has the information about what
+# columns are used, then bind this argument as
+# `compute_metrics = lambda x: compute_metrics(x, columns)` at main.py when columns
+# are known.
+def compute_metrics(eval_pred: EvalPrediction, columns: list[str]) -> dict[str, float]:
+    # preds and labels are aligned and ordered according
+    # to TrainingArguments.label_names.
     preds, labels = eval_pred.predictions, eval_pred.label_ids
-    # Fields are ordered according to TrainingArguments.label_names.
-    assert len(preds) == len(labels) == 8
-    null_f1 = f1_score(preds[0].flatten(), labels[0].flatten(), average='macro')
-    lemma_f1 = f1_score(preds[1].flatten(), labels[1].flatten(), average='macro')
-    morph_f1 = f1_score(preds[2].flatten(), labels[2].flatten(), average='macro')
-    ud_syntax_jaccard = jaccard_score_vectorwise(preds[3], labels[3])
-    eud_syntax_jaccard = jaccard_score_vectorwise(preds[4], labels[4])
-    miscs_f1 = f1_score(preds[5].flatten(), labels[5].flatten(), average='macro')
-    deepslot_f1 = f1_score(preds[6].flatten(), labels[6].flatten(), average='macro')
-    semclass_f1 = f1_score(preds[7].flatten(), labels[7].flatten(), average='macro')
-    return {
-        "null_f1": null_f1,
-        "lemma_f1": lemma_f1,
-        "morphology_f1": morph_f1,
-        "ud_jaccard": ud_syntax_jaccard,
-        "eud_jaccard": eud_syntax_jaccard,
-        "miscs_f1": miscs_f1,
-        "deepslot_f1": deepslot_f1,
-        "semclass_f1": semclass_f1
+    assert len(preds) == len(labels)
+
+    result = {
+        "null_f1": f1_score(preds[0].flatten(), labels[0].flatten(), average='macro')
     }
+
+    current_position = 1
+    if "lemma_rules" in columns:
+        result["lemma_f1"] = f1_score(
+            preds[current_position].flatten(),
+            labels[current_position].flatten(),
+            average='macro'
+        )
+        current_position += 1
+
+    if "joint_feats" in columns:
+        result["morphology_f1"] = f1_score(
+            preds[current_position].flatten(),
+            labels[current_position].flatten(),
+            average='macro'
+        )
+        current_position += 1
+
+    if "deps_ud" in columns:
+        result["ud_jaccard"] = jaccard_score_vectorwise(
+            preds[current_position],
+            labels[current_position]
+        )
+        current_position += 1
+
+    if "deps_eud" in columns:
+        result["eud_jaccard"] = jaccard_score_vectorwise(
+            preds[current_position],
+            labels[current_position]
+        )
+        current_position += 1
+
+    if "miscs" in columns:
+        result["miscs_f1"] = f1_score(
+            preds[current_position].flatten(),
+            labels[current_position].flatten(),
+            average='macro'
+        )
+        current_position += 1
+
+    if "deepslots" in columns:
+        result["deepslot_f1"] = f1_score(
+            preds[current_position].flatten(),
+            labels[current_position].flatten(),
+            average='macro'
+        )
+        current_position += 1
+
+    if "semclasses" in columns:
+        result["semclass_f1"] = f1_score(
+            preds[current_position].flatten(),
+            labels[current_position].flatten(),
+            average='macro'
+        )
+        current_position += 1
+
+    return result

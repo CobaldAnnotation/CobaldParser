@@ -4,5 +4,9 @@
 --save_strategy epoch
 --save_total_limit 2
 --hub_strategy end
---label_names counting_mask lemma_rules morph_feats deps_ud deps_eud miscs deepslots semclasses
---remove_unused_columns False
+--
+    # # FIXME
+    print(f"compute_metrics is called with")
+    print(f"preds: {preds}")
+    print(f"labels: {labels}")
+    print(f"columns: {columns}")

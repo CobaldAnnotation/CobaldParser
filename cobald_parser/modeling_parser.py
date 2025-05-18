@@ -21,7 +21,7 @@ class CobaldParserOutput(ModelOutput):
     """
     Output type for CobaldParser.
     """
-    loss: float = 0.0
+    loss: float = None
     words: list = None
     counting_mask: LongTensor = None
     lemma_rules: LongTensor = None
@@ -118,7 +118,7 @@ class CobaldParser(PreTrainedModel):
         texts: list[str] = None,
         inference_mode: bool = False
     ) -> CobaldParserOutput:
-        result = CobaldParserOutput()
+        result = {}
 
         # Extra [CLS] token accounts for the case when #NULL is the first token in a sentence.
         words_with_cls = prepend_cls(words)
@@ -127,37 +127,37 @@ class CobaldParser(PreTrainedModel):
         embeddings_without_nulls = self.encoder(words_without_nulls)
         # Predict nulls.
         null_output = self.null_classifier(embeddings_without_nulls, counting_masks)
-        result.counting_mask = null_output['preds']
-        result.loss += null_output["loss"]
+        result["counting_mask"] = null_output['preds']
+        result["loss"] = null_output["loss"]
 
         # "Teacher forcing": during training, pass the original words (with gold nulls)
         # to the classification heads, so that they are trained upon correct sentences.
         if inference_mode:
             # Restore predicted nulls in the original sentences.
-            result.words = add_nulls(words, null_output["preds"])
+            result["words"] = add_nulls(words, null_output["preds"])
         else:
-            result.words = words
+            result["words"] = words
 
         # Encode words with nulls.
         # [batch_size, seq_len, embedding_size]
-        embeddings = self.encoder(result.words)
+        embeddings = self.encoder(result["words"])
 
         # Predict lemmas and morphological features.
         if hasattr(self, "lemma_rule_classifier"):
             lemma_output = self.lemma_rule_classifier(embeddings, lemma_rules)
-            result.lemma_rules = lemma_output['preds']
-            result.loss += lemma_output['loss']
+            result["lemma_rules"] = lemma_output['preds']
+            result["loss"] += lemma_output['loss']
 
         if hasattr(self, "morphology_classifier"):
             joint_feats_output = self.morphology_classifier(embeddings, joint_feats)
-            result.joint_feats = joint_feats_output['preds']
-            result.loss += joint_feats_output['loss']
+            result["joint_feats"] = joint_feats_output['preds']
+            result["loss"] += joint_feats_output['loss']
 
         # Predict syntax.
         if hasattr(self, "dependency_classifier"):
             # [batch_size, seq_len]
-            padding_mask = build_padding_mask(result.words, self.device)
-            null_mask = build_null_mask(result.words, self.device)
+            padding_mask = build_padding_mask(result["words"], self.device)
+            null_mask = build_null_mask(result["words"], self.device)
             # Mask nulls for basic UD and don't mask for E-UD.
             deps_output = self.dependency_classifier(
                 embeddings,
@@ -166,25 +166,25 @@ class CobaldParser(PreTrainedModel):
                 mask_ud=(padding_mask & ~null_mask),
                 mask_eud=padding_mask
             )
-            result.deps_ud = deps_output['preds_ud']
-            result.deps_eud = deps_output['preds_eud']
-            result.loss += deps_output['loss_ud'] + deps_output['loss_eud']
+            result["deps_ud"] = deps_output['preds_ud']
+            result["deps_eud"] = deps_output['preds_eud']
+            result["loss"] += deps_output['loss_ud'] + deps_output['loss_eud']
 
         # Predict miscellaneous features.
         if hasattr(self, "misc_classifier"):
             misc_output = self.misc_classifier(embeddings, miscs)
-            result.miscs = misc_output['preds']
-            result.loss += misc_output['loss']
+            result["miscs"] = misc_output['preds']
+            result["loss"] += misc_output['loss']
 
         # Predict semantics.
         if hasattr(self, "deepslot_classifier"):
             deepslot_output = self.deepslot_classifier(embeddings, deepslots)
-            result.deepslots = deepslot_output['preds']
-            result.loss += deepslot_output['loss']
+            result["deepslots"] = deepslot_output['preds']
+            result["loss"] += deepslot_output['loss']
 
         if hasattr(self, "semclass_classifier"):
             semclass_output = self.semclass_classifier(embeddings, semclasses)
-            result.semclasses = semclass_output['preds']
-            result.loss += semclass_output['loss']
+            result["semclasses"] = semclass_output['preds']
+            result["loss"] += semclass_output['loss']
 
-        return result
+        return CobaldParserOutput(**result)

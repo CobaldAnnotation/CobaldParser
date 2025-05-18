@@ -76,34 +76,37 @@ class CustomTrainer(Trainer):
         organization, model_name = self.hub_model_id.split('/')
         hub_dataset_id = f"{organization}/{dataset.info.dataset_name}"
 
-        _, _, eval_results = parse_log_history(self.state.log_history)
+        _, _, eval_results_plain = parse_log_history(self.state.log_history)
 
-        def create_eval_result(metric_name: str, metric_type: str):
-            return EvalResult(
-                task_type='token-classification',
-                dataset_type=hub_dataset_id,
-                dataset_name=dataset.info.dataset_name,
-                dataset_split='validation',
-                metric_name=metric_name,
-                metric_type=metric_type,
-                metric_value=eval_results[metric_name]
-            )
+        eval_results = []
+        for metric_name, metric_type in (
+            ('Null F1', 'f1'),
+            ('Lemma F1', 'f1'),
+            ('Morphology F1', 'f1'),
+            ('Ud Jaccard', 'accuracy'),
+            ('Eud Jaccard', 'accuracy'),
+            ('Miscs F1', 'f1'),
+            ('Deepslot F1', 'f1'),
+            ('Semclass F1', 'f1')
+        ):
+            if metric_name in eval_results_plain:
+                eval_result = EvalResult(
+                    task_type='token-classification',
+                    dataset_type=hub_dataset_id,
+                    dataset_name=dataset.info.dataset_name,
+                    dataset_split='validation',
+                    metric_name=metric_name,
+                    metric_type=metric_type,
+                    metric_value=eval_results_plain[metric_name]
+                )
+                eval_results.append(eval_result)
 
         card = ModelCard.from_template(
             card_data=ModelCardData(
                 base_model=self.model.config.encoder_model_name,
                 datasets=hub_dataset_id,
                 language=dataset.info.config_name,
-                eval_results=[
-                    create_eval_result('Null F1', 'f1'),
-                    create_eval_result('Lemma F1', 'f1'),
-                    create_eval_result('Morphology F1', 'f1'),
-                    create_eval_result('Ud Jaccard', 'accuracy'),
-                    create_eval_result('Eud Jaccard', 'accuracy'),
-                    create_eval_result('Miscs F1', 'f1'),
-                    create_eval_result('Deepslot F1', 'f1'),
-                    create_eval_result('Semclass F1', 'f1')
-                ],
+                eval_results=eval_results,
                 library_name='transformers',
                 license='gpl-3.0',
                 metrics=['accuracy', 'f1'],

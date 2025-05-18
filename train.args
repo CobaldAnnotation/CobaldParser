@@ -4,9 +4,3 @@
 --save_strategy epoch
 --save_total_limit 2
 --hub_strategy end
---
-    # # FIXME
-    print(f"compute_metrics is called with")
-    print(f"preds: {preds}")
-    print(f"labels: {labels}")
-    print(f"columns: {columns}")

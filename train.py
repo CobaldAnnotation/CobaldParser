@@ -4,7 +4,6 @@ from typing import override
 from torch.optim import AdamW
 from datasets import load_dataset
 from transformers import (
-    AutoModel,
     HfArgumentParser,
     TrainingArguments,
     Trainer,
@@ -156,10 +155,6 @@ class CustomTrainer(Trainer):
         optimizer_grouped_parameters = []
 
         # Add classifier with the base LR
-        # classifiers_params = [
-        #     classifier.parameters()
-        #     for classifier in self.model.classifiers.values()
-        # ]
         optimizer_grouped_parameters.append({
             "params": self.model.classifiers.parameters(),
             "lr": base_lr,

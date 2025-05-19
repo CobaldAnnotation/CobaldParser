@@ -39,34 +39,49 @@ def jaccard_score_vectorwise(pred_arcs: np.ndarray, gold_arcs: np.ndarray) -> fl
 # columns are used, then bind this argument as
 # `compute_metrics = lambda x: compute_metrics(x, columns)` at main.py when columns
 # are known.
-def compute_metrics(eval_pred: EvalPrediction, columns: list[str]) -> dict[str, float]:
+def compute_metrics(
+    eval_pred: EvalPrediction,
+    columns: list[str],
+    padding_value: int = -100
+) -> dict[str, float]:
     # preds and labels are aligned and ordered according
     # to TrainingArguments.label_names.
     preds, labels = eval_pred.predictions, eval_pred.label_ids
     assert len(preds) == len(labels)
 
-    result = {
-        "null_f1": f1_score(preds[0].flatten(), labels[0].flatten(), average='macro')
-    }
+    result = {}
 
-    current_position = 1
+    current_position = 0
+    if "counting_masks" in columns:
+        # mask of non-padded values
+        mask = labels[current_position] != padding_value
+        result["null_f1"] = f1_score(
+            preds[current_position][mask],
+            labels[current_position][mask],
+            average='macro'
+        )
+        current_position += 1
+
     if "lemma_rules" in columns:
+        mask = labels[current_position] != padding_value
         result["lemma_f1"] = f1_score(
-            preds[current_position].flatten(),
-            labels[current_position].flatten(),
+            preds[current_position][mask],
+            labels[current_position][mask],
             average='macro'
         )
         current_position += 1
 
     if "joint_feats" in columns:
+        mask = labels[current_position] != padding_value
         result["morphology_f1"] = f1_score(
-            preds[current_position].flatten(),
-            labels[current_position].flatten(),
+            preds[current_position][mask],
+            labels[current_position][mask],
             average='macro'
         )
         current_position += 1
 
     if "deps_ud" in columns:
+        mask = labels[current_position] != padding_value
         result["ud_jaccard"] = jaccard_score_vectorwise(
             preds[current_position],
             labels[current_position]
@@ -74,6 +89,7 @@ def compute_metrics(eval_pred: EvalPrediction, columns: list[str]) -> dict[str, 
         current_position += 1
 
     if "deps_eud" in columns:
+        mask = labels[current_position] != padding_value
         result["eud_jaccard"] = jaccard_score_vectorwise(
             preds[current_position],
             labels[current_position]
@@ -81,25 +97,28 @@ def compute_metrics(eval_pred: EvalPrediction, columns: list[str]) -> dict[str, 
         current_position += 1
 
     if "miscs" in columns:
+        mask = labels[current_position] != padding_value
         result["miscs_f1"] = f1_score(
-            preds[current_position].flatten(),
-            labels[current_position].flatten(),
+            preds[current_position][mask],
+            labels[current_position][mask],
             average='macro'
         )
         current_position += 1
 
     if "deepslots" in columns:
+        mask = labels[current_position] != padding_value
         result["deepslot_f1"] = f1_score(
-            preds[current_position].flatten(),
-            labels[current_position].flatten(),
+            preds[current_position][mask],
+            labels[current_position][mask],
             average='macro'
         )
         current_position += 1
 
     if "semclasses" in columns:
+        mask = labels[current_position] != padding_value
         result["semclass_f1"] = f1_score(
-            preds[current_position].flatten(),
-            labels[current_position].flatten(),
+            preds[current_position][mask],
+            labels[current_position][mask],
             average='macro'
         )
         current_position += 1

@@ -53,7 +53,6 @@ def transfer_pretrained(model, pretrained_model):
                 pass
 
 
-
 MODELCARD_TEMPLATE = """
 ---
 {{ card_data }}
@@ -76,6 +75,7 @@ This model parses a pre-tokenized CoNLL-U text and jointly labels each token wit
 
 ## Citation
 
+```
 @inproceedings{baiuk2025cobald,
   title={CoBaLD Parser: Joint Morphosyntactic and Semantic Annotation},
   author={Baiuk, Ilia and Baiuk, Alexandra and Petrova, Maria},
@@ -83,6 +83,7 @@ This model parses a pre-tokenized CoNLL-U text and jointly labels each token wit
   volume={I},
   year={2025}
 }
+```
 """
 
 

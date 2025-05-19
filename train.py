@@ -4,6 +4,7 @@ from typing import override
 from torch.optim import AdamW
 from datasets import load_dataset
 from transformers import (
+    AutoModel,
     HfArgumentParser,
     TrainingArguments,
     Trainer,
@@ -16,7 +17,6 @@ from cobald_parser import CobaldParserConfig, CobaldParser
 from src.processing import (
     preprocess,
     collate_with_padding,
-    COUNTING_MASK,
     LEMMA_RULE,
     JOINT_FEATS,
     UD_DEPREL,
@@ -33,6 +33,36 @@ def export_vocabulary(train_dataset_features, config):
         if column in train_dataset_features:
             labels = train_dataset_features[column].feature.names
             config.vocabulary[column] = dict(enumerate(labels))
+
+
+def transfer_pretrained(model, pretrained_model):
+    if not isinstance(pretrained_model, CobaldParser):
+        raise ValueError(f"Pretrained model must be CobaldParser class instance")
+
+    # Transfer encoder
+    model.encoder = pretrained_model.encoder
+
+    # List of classifiers to transfer
+    classifiers = [
+        "null_classifier",
+        "lemma_rule_classifier",
+        "morphology_classifier",
+        "dependency_classifier",
+        "misc_classifier",
+        "deepslot_classifier",
+        "semclass_classifier"
+    ]
+
+    for classifier in classifiers:
+        if hasattr(model, classifier) and hasattr(pretrained_model, classifier):
+            try:
+                # Try to transfer weights from pretrained classifier if it matches
+                # the shape of the model's classifier (e.g. hidden_size, n_classes, etc.)
+                pretrained_state = getattr(pretrained_model, classifier).state_dict()
+                getattr(model, classifier).load_state_dict(pretrained_state)
+            except Exception:
+                pass
+
 
 
 MODELCARD_TEMPLATE = """
@@ -223,6 +253,7 @@ if __name__ == "__main__":
     parser.add_argument('--model_config', required=True)
     parser.add_argument('--dataset_path', required=True)
     parser.add_argument('--dataset_config_name')
+    parser.add_argument('--finetune_from')
 
     # Parse command-line arguments.
     training_args, custom_args = parser.parse_args_into_dataclasses()
@@ -254,6 +285,13 @@ if __name__ == "__main__":
             training_args.label_names.append(parser_input)
 
     model = CobaldParser(model_config)
+
+    if custom_args.finetune_from:
+        pretrained_model = CobaldParser.from_pretrained(
+            custom_args.finetune_from,
+            trust_remote_code=True
+        )
+        transfer_pretrained(model, pretrained_model)
 
     # Create trainer and train the model.
     unfreeze_callback = GradualUnfreezeCallback()

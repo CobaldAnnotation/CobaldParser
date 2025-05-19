@@ -42,24 +42,14 @@ def transfer_pretrained(model, pretrained_model):
     # Transfer encoder
     model.encoder = pretrained_model.encoder
 
-    # List of classifiers to transfer
-    classifiers = [
-        "null_classifier",
-        "lemma_rule_classifier",
-        "morphology_classifier",
-        "dependency_classifier",
-        "misc_classifier",
-        "deepslot_classifier",
-        "semclass_classifier"
-    ]
-
-    for classifier in classifiers:
-        if hasattr(model, classifier) and hasattr(pretrained_model, classifier):
+    # Transfer classifiers
+    for name in model.classifiers:
+        if name in pretrained_model.classifiers:
             try:
                 # Try to transfer weights from pretrained classifier if it matches
                 # the shape of the model's classifier (e.g. hidden_size, n_classes, etc.)
-                pretrained_state = getattr(pretrained_model, classifier).state_dict()
-                getattr(model, classifier).load_state_dict(pretrained_state)
+                pretrained_classifier_state = pretrained_model.classifiers[name].state_dict()
+                model.classifiers[name].load_state_dict(pretrained_classifier_state)
             except Exception:
                 pass
 
@@ -166,22 +156,12 @@ class CustomTrainer(Trainer):
         optimizer_grouped_parameters = []
 
         # Add classifier with the base LR
-        classifiers_params = []
-        classifiers_params.extend(self.model.null_classifier.parameters())
-        if hasattr(self.model, "lemma_rule_classifier"):
-            classifiers_params.extend(self.model.lemma_rule_classifier.parameters())
-        if hasattr(self.model, "morphology_classifier"):
-            classifiers_params.extend(self.model.morphology_classifier.parameters())
-        if hasattr(self.model, "dependency_classifier"):
-            classifiers_params.extend(self.model.dependency_classifier.parameters())
-        if hasattr(self.model, "misc_classifier"):
-            classifiers_params.extend(self.model.misc_classifier.parameters())
-        if hasattr(self.model, "deepslot_classifier"):
-            classifiers_params.extend(self.model.deepslot_classifier.parameters())
-        if hasattr(self.model, "semclass_classifier"):
-            classifiers_params.extend(self.model.semclass_classifier.parameters())
+        # classifiers_params = [
+        #     classifier.parameters()
+        #     for classifier in self.model.classifiers.values()
+        # ]
         optimizer_grouped_parameters.append({
-            "params": classifiers_params,
+            "params": self.model.classifiers.parameters(),
             "lr": base_lr,
             "weight_decay": decay
         })

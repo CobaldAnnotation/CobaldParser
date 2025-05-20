@@ -84,22 +84,6 @@ def build_counting_mask(words: list[str]) -> np.array:
     return counting_mask
 
 
-def renumerate_heads(ids: list[str], arcs_from: list[str], heads: list[str]) -> list[dict]:
-    """
-    Renumerate ids, so that #NULLs get integer id, e.g. [1, 1.1, 2] turns into [0, 1, 2].
-    Also renumerates deps' heads, starting indexing at 0 and replacing ROOT with self-loop,
-    e.g. [2, 0, 1, 2] -> [1, 1, 0, 1]. It makes parser implementation much easier.
-    """
-    old2new_id = {old_id: new_id for new_id, old_id in enumerate(ids)}
-
-    arcs_to = [
-        old2new_id[head]
-        if head != ROOT_HEAD else token_index
-        for token_index, head in zip(arcs_from, heads, strict=True)
-    ]
-    return arcs_to
-
-
 def transform_fields(sentence: dict) -> dict:
     """
     Transform sentence fields:
@@ -116,43 +100,58 @@ def transform_fields(sentence: dict) -> dict:
         result[LEMMA_RULE] = [
             construct_lemma_rule(word, lemma)
             if lemma is not None else None
-            for word, lemma in zip(sentence[WORD], sentence[LEMMA], strict=True)
+            for word, lemma in zip(sentence[WORD], sentence[LEMMA])
         ]
     
     if UPOS in sentence or XPOS in sentence or FEATS in sentence:
         result[JOINT_FEATS] = [
             f"{upos}#{xpos}#{feats}"
             if (upos is not None or xpos is not None or feats is not None) else None
-            for upos, xpos, feats in zip(sentence[UPOS], sentence[XPOS], sentence[FEATS], strict=True)
+            for upos, xpos, feats in zip(sentence[UPOS], sentence[XPOS], sentence[FEATS])
         ]
+
+    # Renumerate ids, so that tokens are enumerated from 0 and #NULLs get integer id.
+    # E.g. [1, 1.1, 2] -> [0, 1, 2].
+    id2idx = {token_id: token_idx for token_idx, token_id in enumerate(sentence[ID])}
 
     # Basic syntax.
     if HEAD in sentence and DEPREL in sentence:
-        ud_arcs_from, ud_heads, ud_deprels = zip(
+        ud_arcs_from, ud_arcs_to, ud_deprels = zip(
             *[
-                (token_index, str(head), rel)
-                for token_index, (head, rel) in enumerate(zip(sentence[HEAD], sentence[DEPREL], strict=True))
-                if head is not None
-            ],
-            strict=True
+                (
+                    # Replace ROOT with self-loop, it simplifies dependency classifier
+                    # implementation a lot.
+                    id2idx[head_id] if head_id != ROOT_HEAD else id2idx[token_id],
+                    id2idx[token_id],
+                    deprel
+                )
+                # head_id indicates ID of a token that an arc starts from, while
+                # token_id is an ID of a token the arcs leads to.
+                for token_id, head_id, deprel in zip(sentence[ID], sentence[HEAD], sentence[DEPREL])
+                if head_id is not None
+            ]
         )
         result[UD_ARC_FROM] = ud_arcs_from
-        result[UD_ARC_TO] = renumerate_heads(sentence[ID], ud_arcs_from, ud_heads)
+        result[UD_ARC_TO] = ud_arcs_to
         result[UD_DEPREL] = ud_deprels
 
     # Enhanced syntax.
     if DEPS in sentence:
-        eud_arcs_from, eud_heads, eud_deprels = zip(
+        eud_arcs_from, eud_arcs_to, eud_deprels = zip(
             *[
-                (token_index, head, rel)
-                for token_index, deps in enumerate(sentence[DEPS])
-                for head, rel in json.loads(deps).items()
+                (
+                    # Same.
+                    id2idx[head_id] if head_id != ROOT_HEAD else id2idx[token_id],
+                    id2idx[token_id],
+                    deprel
+                )
+                for token_id, deps in zip(sentence[ID], sentence[DEPS])
+                for head_id, deprel in json.loads(deps).items()
                 if deps is not None
-            ],
-            strict=True
+            ]
         )
         result[EUD_ARC_FROM] = eud_arcs_from
-        result[EUD_ARC_TO] = renumerate_heads(sentence[ID], eud_arcs_from, eud_heads)
+        result[EUD_ARC_TO] = eud_arcs_to
         result[EUD_DEPREL] = eud_deprels
 
     return result

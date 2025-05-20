@@ -3,7 +3,6 @@ from typing import override
 import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
 from transformers import Pipeline
-from transformers.modeling_outputs import ModelOutput
 
 from src.lemmatize_helper import reconstruct_lemma
 
@@ -18,8 +17,9 @@ class ConlluTokenClassificationPipeline(Pipeline):
         self.language = language
 
     @override
-    def _sanitize_parameters(self, **kwargs):
-        return {}, {}, {}
+    def _sanitize_parameters(self, conllu: bool = False, **kwargs):
+        # capture conllu flag for postprocessing
+        return {}, {}, {'conllu': conllu}
 
     @override
     def preprocess(self, inputs: str) -> dict:
@@ -34,109 +34,142 @@ class ConlluTokenClassificationPipeline(Pipeline):
             [word for word in word_tokenize(sentence, preserve_line=True)]
             for sentence in sentences
         ]
-        model_inputs = {"words": words}
-        return model_inputs
-    
-    @override
-    def _forward(self, model_inputs: dict) -> ModelOutput:
-        model_outputs = self.model(**model_inputs, inference_mode=True)
-        return model_outputs
-    
-    @override
-    def postprocess(self, model_outputs: ModelOutput) -> list[dict]:
+        return {"words": words}
 
-        n_sentences = len(model_outputs.words)
-        
-        sentences = []
+    @override
+    def _forward(self, model_inputs: dict) -> dict:
+        return self.model(**model_inputs, inference_mode=True)
+
+    @override
+    def postprocess(self, model_outputs: dict, conllu: bool = False) -> list[dict] | str:
+        sentences = self._decode_model_output(model_outputs)
+        # Format sentences into CoNLL-U string if requested.
+        if conllu:
+            sentences = self._format_conllu(sentences)
+        return sentences
+
+    def _decode_model_output(self, model_outputs: dict) -> list[dict]:
+        n_sentences = len(model_outputs["words"])
+
+        sentences_decoded = []
         for i in range(n_sentences):
-        
+
             def select_arcs(arcs, batch_idx):
                 # Select arcs where batch index == batch_idx
                 # Return tensor of shape [n_selected_arcs, 3]
                 return arcs[arcs[:, 0] == batch_idx][:, 1:]
             
             # Model outputs are padded tensors, so only leave first `n_words` labels.
-            n_words = len(model_outputs.words[i])
+            n_words = len(model_outputs["words"][i])
 
-            sentence = self._postprocess_sentence(
+            optional_tags = {}
+            if "lemma_rules" in model_outputs:
+                optional_tags["lemma_rule_ids"] = model_outputs["lemma_rules"][i, :n_words].tolist()
+            if "joint_feats" in model_outputs:
+                optional_tags["joint_feats_ids"] = model_outputs["joint_feats"][i, :n_words].tolist()
+            if "deps_ud" in model_outputs:
+                optional_tags["deps_ud"] = select_arcs(model_outputs["deps_ud"], i).tolist()
+            if "deps_eud" in model_outputs:
+                optional_tags["deps_eud"] = select_arcs(model_outputs["deps_eud"], i).tolist()
+            if "miscs" in model_outputs:
+                optional_tags["misc_ids"] = model_outputs["miscs"][i, :n_words].tolist()
+            if "deepslots" in model_outputs:
+                optional_tags["deepslot_ids"] = model_outputs["deepslots"][i, :n_words].tolist()
+            if "semclasses" in model_outputs:
+                optional_tags["semclass_ids"] = model_outputs["semclasses"][i, :n_words].tolist()
+
+            sentence_decoded = self._decode_sentence(
                 text=self._texts[i],
-                words=model_outputs.words[i],
-                lemma_rule_ids=model_outputs.lemma_rules[i, :n_words].tolist(),
-                morph_feats_ids=model_outputs.morph_feats[i, :n_words].tolist(),
-                deps_ud=select_arcs(model_outputs.deps_ud, i).tolist(),
-                deps_eud=select_arcs(model_outputs.deps_eud, i).tolist(),
-                misc_ids=model_outputs.miscs[i, :n_words].tolist(),
-                deepslot_ids=model_outputs.deepslots[i, :n_words].tolist(),
-                semclass_ids=model_outputs.semclasses[i, :n_words].tolist()
+                words=model_outputs["words"][i],
+                **optional_tags,
             )
-            sentences.append(sentence)
-        return sentences
+            sentences_decoded.append(sentence_decoded)
+        return sentences_decoded
 
-    def _postprocess_sentence(
+    def _decode_sentence(
         self,
         text: str,
         words: list[str],
-        lemma_rule_ids: list[int],
-        morph_feats_ids: list[int],
-        deps_ud: list[list[int]],
-        deps_eud: list[list[int]],
-        misc_ids: list[int],
-        deepslot_ids: list[int],
-        semclass_ids: list[int]
+        lemma_rule_ids: list[int] = None,
+        joint_feats_ids: list[int] = None,
+        deps_ud: list[list[int]] = None,
+        deps_eud: list[list[int]] = None,
+        misc_ids: list[int] = None,
+        deepslot_ids: list[int] = None,
+        semclass_ids: list[int] = None
     ) -> dict:
 
+        # Enumerate words in the sentence, starting from 1.
         ids = self._enumerate_words(words)
 
-        lemmas = [
-            reconstruct_lemma(
-                word,
-                self.model.config.id2lemma_rule[lemma_rule_id]
+        result = {
+            "text": text,
+            "words": words,
+            "ids": ids
+        }
+
+        # Decode lemmas.
+        if lemma_rule_ids:
+            result["lemmas"] = [
+                reconstruct_lemma(
+                    word,
+                    self.model.config.vocabulary["lemma_rule"][lemma_rule_id]
+                )
+                for word, lemma_rule_id in zip(words, lemma_rule_ids, strict=True)
+            ]
+        # Decode POS and features.
+        if joint_feats_ids:
+            upos, xpos, feats = zip(
+                *[
+                    self.model.config.vocabulary["joint_feats"][joint_feats_id].split('#')
+                    for joint_feats_id in joint_feats_ids
+                ],
+                strict=True
             )
-            for word, lemma_rule_id in zip(words, lemma_rule_ids, strict=True)
-        ]
-
-        upos, xpos, feats = zip(
-            *[
-                self.model.config.id2morph_feats[morph_feats_id].split('#')
-                for morph_feats_id in morph_feats_ids
-            ],
-            strict=True
-        )
-        upos, xpos, feats = list(upos), list(xpos), list(feats)
-
-        # ids stores inverse mapping from internal numeration to the standard one,
-        # so simply use ids[internal_idx] to get conllu index.
-        convert_arcs_to_conllu_format = lambda arcs, id2rel: [
+            result["upos"] = list(upos)
+            result["xpos"] = list(xpos)
+            result["feats"] = list(feats)
+        # Decode syntax.
+        renumerate_and_decode_arcs = lambda arcs, id2rel: [
             (
-                ids[arc_from],
-                ids[arc_to] if arc_from != arc_to else '0',
+                # ids stores inverse mapping from internal numeration to the standard
+                # conllu numeration, so simply use ids[internal_idx] to retrieve token id
+                # from internal index.
+                ids[arc_from] if arc_from != arc_to else '0',
+                ids[arc_to],
                 id2rel[deprel_id]
             )
             for arc_from, arc_to, deprel_id in arcs
         ]
-        deps_ud = convert_arcs_to_conllu_format(deps_ud, self.model.config.id2rel_ud)
-        deps_eud = convert_arcs_to_conllu_format(deps_eud, self.model.config.id2rel_eud)
+        if deps_ud:
+            result["deps_ud"] = renumerate_and_decode_arcs(
+                deps_ud,
+                self.model.config.vocabulary["ud_deprel"]
+            )
+        if deps_eud:
+            result["deps_eud"] = renumerate_and_decode_arcs(
+                deps_eud,
+                self.model.config.vocabulary["eud_deprel"]
+            )
+        # Decode misc.
+        if misc_ids:
+            result["miscs"] = [
+                self.model.config.vocabulary["misc"][misc_id]
+                for misc_id in misc_ids
+            ]
+        # Decode semantics.
+        if deepslot_ids:
+            result["deepslots"] = [
+                self.model.config.vocabulary["deepslot"][deepslot_id] 
+                for deepslot_id in deepslot_ids
+            ]
+        if semclass_ids:
+            result["semclasses"] = [
+                self.model.config.vocabulary["semclass"][semclass_id] 
+                for semclass_id in semclass_ids
+            ]
+        return result
 
-        miscs = [self.model.config.id2misc[misc_id] for misc_id in misc_ids]
-        deepslots = [self.model.config.id2deepslot[deepslot_id] for deepslot_id in deepslot_ids]
-        semclasses = [self.model.config.id2semclass[semclass_id] for semclass_id in semclass_ids]
-
-        sentence = {
-            "text": text,
-            "ids": ids,
-            "words": words,
-            "lemmas": lemmas,
-            "upos": upos,
-            "xpos": xpos,
-            "feats": feats,
-            "deps_ud": deps_ud,
-            "deps_eud": deps_eud,
-            "miscs": miscs,
-            "deepslots": deepslots,
-            "semclasses": semclasses
-        }
-        return sentence
-    
     @staticmethod
     def _enumerate_words(words: list[str]) -> list[str]:
         ids = []
@@ -151,3 +184,50 @@ class ConlluTokenClassificationPipeline(Pipeline):
                 current_null_count = 0
                 ids.append(f"{current_id}")
         return ids
+
+    @staticmethod
+    def _format_conllu(sentences: list[dict]) -> str:
+        """
+        Format a list of sentence dicts into a CoNLL-U formatted string.
+        """
+        formatted = []
+        for sentence in sentences:
+            # The first line is a text matadata.
+            lines = [f"# text = {sentence["text"]}"]
+
+            id2idx = {token_id: idx for idx, token_id in enumerate(sentence['ids'])}
+
+            # Basic syntax.
+            heads = [''] * len(id2idx)
+            deprels = [''] * len(id2idx)
+            if "deps_ud" in sentence:
+                for arc_from, arc_to, deprel in sentence['deps_ud']:
+                    token_idx = id2idx[arc_to]
+                    heads[token_idx] = arc_from
+                    deprels[token_idx] = deprel
+
+            # Enhanced syntax.
+            deps_dicts = [{} for _ in range(len(id2idx))]
+            if "deps_eud" in sentence:
+                for arc_from, arc_to, deprel in sentence['deps_eud']:
+                    token_idx = id2idx[arc_to]
+                    deps_dicts[token_idx][arc_from] = deprel
+
+            for idx, token_id in enumerate(sentence['ids']):
+                word = sentence['words'][idx]
+                lemma = sentence['lemmas'][idx] if "lemmas" in sentence else ''
+                upos = sentence['upos'][idx] if "upos" in sentence else ''
+                xpos = sentence['xpos'][idx] if "xpos" in sentence else ''
+                feats = sentence['feats'][idx] if "feats" in sentence else ''
+                deps = '|'.join(f"{head}:{rel}" for head, rel in deps_dicts[idx].items()) or '_'
+                misc = sentence['miscs'][idx] if "miscs" in sentence else ''
+                deepslot = sentence['deepslots'][idx] if "deepslots" in sentence else ''
+                semclass = sentence['semclasses'][idx] if "semclasses" in sentence else ''
+                # CoNLL-U columns
+                line = '\t'.join([
+                    token_id, word, lemma, upos, xpos, feats, heads[idx],
+                    deprels[idx], deps, misc, deepslot, semclass
+                ])
+                lines.append(line)
+            formatted.append('\n'.join(lines))
+        return '\n\n'.join(formatted)

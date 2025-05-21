@@ -144,8 +144,8 @@ class CobaldParser(PreTrainedModel):
                 embeddings,
                 deps_ud,
                 deps_eud,
-                mask_ud=(padding_mask & ~null_mask),
-                mask_eud=padding_mask
+                null_mask,
+                padding_mask
             )
             output["deps_ud"] = deps_output['preds_ud']
             output["deps_eud"] = deps_output['preds_eud']

@@ -105,7 +105,7 @@ def transform_fields(sentence: dict) -> dict:
     
     if UPOS in sentence or XPOS in sentence or FEATS in sentence:
         result[JOINT_FEATS] = [
-            f"{upos}#{xpos}#{feats}"
+            f"{upos or '_'}#{xpos or '_'}#{feats or '_'}"
             if (upos is not None or xpos is not None or feats is not None) else None
             for upos, xpos, feats in zip(sentence[UPOS], sentence[XPOS], sentence[FEATS])
         ]
@@ -121,7 +121,7 @@ def transform_fields(sentence: dict) -> dict:
                 (
                     # Replace ROOT with self-loop, it simplifies dependency classifier
                     # implementation a lot.
-                    id2idx[head_id] if head_id != ROOT_HEAD else id2idx[token_id],
+                    id2idx[str(head_id)] if str(head_id) != ROOT_HEAD else id2idx[token_id],
                     id2idx[token_id],
                     deprel
                 )

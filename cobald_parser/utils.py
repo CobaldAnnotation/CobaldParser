@@ -21,7 +21,7 @@ def build_padding_mask(sentences: list[list[str]], device) -> Tensor:
     return _build_condition_mask(sentences, condition_fn=lambda word: True, device=device)
 
 def build_null_mask(sentences: list[list[str]], device) -> Tensor:
-    return _build_condition_mask(sentences, condition_fn=lambda word: word == "#NULL", device=device)
+    return _build_condition_mask(sentences, condition_fn=lambda word: word != "#NULL", device=device)
 
 
 def pairwise_mask(masks1d: Tensor) -> Tensor:

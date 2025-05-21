@@ -7,8 +7,7 @@ import numpy as np
 
 def decode_mst(
     energy: np.ndarray,
-    length: int,
-    has_labels: bool = True
+    length: int
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Note: Counter to typical intuition, this function decodes the _maximum_
@@ -20,33 +19,20 @@ def decode_mst(
     # Parameters
 
     energy : `np.ndarray`, required.
-        A tensor with shape (num_labels, timesteps, timesteps)
-        containing the energy of each edge. If has_labels is `False`,
-        the tensor should have shape (timesteps, timesteps) instead.
+        A tensor with shape (timesteps, timesteps)
+        containing the energy of each edge.
     length : `int`, required.
         The length of this sequence, as the energy may have come
         from a padded batch.
-    has_labels : `bool`, optional, (default = `True`)
-        Whether the graph has labels or not.
     """
-    if has_labels:
-        assert energy.ndim == 3, "The dimension of the energy array is not equal to 3."
-    else:
-        assert energy.ndim == 2, "The dimension of the energy array is not equal to 2."
+    assert energy.ndim == 2, "The dimension of the energy array is not equal to 2."
 
     input_shape = energy.shape
     max_length = input_shape[-1]
 
     # Our energy matrix might have been batched -
     # here we clip it to contain only non padded tokens.
-    if has_labels:
-        energy = energy[:, :length, :length]
-        # get best label for each edge.
-        label_id_matrix = energy.argmax(axis=0)
-        energy = energy.max(axis=0)
-    else:
-        energy = energy[:length, :length]
-        label_id_matrix = None
+    energy = energy[:length, :length]
     # get original score matrix
     original_score_matrix = energy
     # initialize score matrix to original score matrix
@@ -77,17 +63,9 @@ def decode_mst(
     )
 
     heads = np.zeros([max_length], np.int32)
-    if has_labels:
-        head_type = np.ones([max_length], np.int32)
-    else:
-        head_type = None
-
     for child, parent in final_edges.items():
         heads[child] = parent
-        if has_labels:
-            head_type[child] = label_id_matrix[parent, child]
-
-    return heads, head_type
+    return heads
 
 
 def chu_liu_edmonds(

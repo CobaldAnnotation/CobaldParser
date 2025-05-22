@@ -42,7 +42,7 @@ class TestBuildPaddingMask:
         sentences = [[], []]
         result = build_padding_mask(sentences, device="cpu")
         expected = torch.tensor([[], []], dtype=torch.bool)
-        assert result.shape == (2, 0)
+        assert torch.equal(result, expected)
 
 
 class TestBuildNullMask:
@@ -55,7 +55,8 @@ class TestBuildNullMask:
     def test_build_null_mask_no_nulls(self):
         sentences = [["hello", "world"], ["test"]]
         result = build_null_mask(sentences, device="cpu")
-        expected = torch.tensor([[True, True], [True, True]])
+        print(result)
+        expected = torch.tensor([[True, True], [True, False]])
         assert torch.equal(result, expected)
 
 

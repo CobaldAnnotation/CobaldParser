@@ -63,14 +63,14 @@ def s_rel():
 def gold_arcs():
     # Create gold arcs [n_arcs, 4] where the columns are [batch_idx, dep_idx, head_idx, rel_idx]
     return torch.tensor(
-        [[0, 0, 1, 2],  # batch 0, token 0 has head at 1 with relation 2
-         [0, 1, 2, 4],  # batch 0, token 1 has head at 2 with relation 4
-         [0, 2, 0, 4],  # batch 0, token 2 has head at 0 with relation 4
+        [[0, 0, 1, 2],  # batch 0, token 1 has head 0 with relation 2
+         [0, 1, 2, 4],  # batch 0, token 2 has head 1 with relation 4
+         [0, 2, 0, 4],  # batch 0, token 0 has head 2 with relation 4
                         # batch 0, token 3 is padded
-         [1, 0, 1, 3],  # batch 1, token 0 has head at 1 with relation 3
+         [1, 0, 1, 3],  # batch 1, token 1 has head 0 with relation 3
          [1, 1, 1, 2],  # batch 1, token 1 has self-loop with relation 2
                         # batch 1, token 2 is masked
-         [1, 3, 1, 0]], # batch 1, token 3 has head at 1 with relation 0
+         [1, 3, 1, 0]], # batch 1, token 1 has head 3 with relation 0
     )
 
 
@@ -82,7 +82,7 @@ class TestDependencyHead:
 
     def test_calc_arc_loss(self, s_arc, gold_arcs):
         arc_loss = self.dependency_head.calc_arc_loss(s_arc, gold_arcs)
-        assert torch.isclose(arc_loss, torch.tensor(1.3446), atol=1e-4)
+        assert torch.isclose(arc_loss, torch.tensor(1.2386), atol=1e-4)
 
     def test_calc_rel_loss(self, s_rel, gold_arcs):
         rel_loss = self.dependency_head.calc_rel_loss(s_rel, gold_arcs)

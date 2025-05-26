@@ -123,4 +123,6 @@ def compute_metrics(
         )
         current_position += 1
 
+    result["average"] = sum(result.values()) / len(result.values())
+
     return result

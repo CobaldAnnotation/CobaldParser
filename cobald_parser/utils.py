@@ -57,9 +57,12 @@ def add_nulls(sentences: list[list[str]], counting_mask) -> list[list[str]]:
     Return a copy of sentences with nulls restored according to counting masks.
     """
     sentences_with_nulls = []
-    for sentence, counting_mask in zip(sentences, counting_mask):
+    for sentence, counting_mask in zip(sentences, counting_mask, strict=True):
         sentence_with_nulls = []
-        for word, n_nulls_to_insert in zip(sentence, counting_mask):
+        assert 0 < len(counting_mask)
+        # Account for leading (CLS) auxiliary token. 
+        sentence_with_nulls.extend(["#NULL"] * counting_mask[0])
+        for word, n_nulls_to_insert in zip(sentence, counting_mask[1:], strict=True):
             sentence_with_nulls.append(word)
             sentence_with_nulls.extend(["#NULL"] * n_nulls_to_insert)
         sentences_with_nulls.append(sentence_with_nulls)

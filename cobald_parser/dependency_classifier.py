@@ -140,8 +140,10 @@ class DependencyHead(DependencyHeadBase):
             # - [batch_size, seq_len]
             pred_arcs_seq = s_arc.argmax(dim=1)
         else:
+            # FIXME
             # During inference, decode Maximum Spanning Tree.
-            pred_arcs_seq = self._mst_decode(s_arc, padding_mask)
+            # pred_arcs_seq = self._mst_decode(s_arc, padding_mask)
+            pred_arcs_seq = s_arc.argmax(dim=1)
 
         # Upscale arcs sequence of shape [batch_size, seq_len]
         # to matrix of shape [batch_size, seq_len, seq_len].

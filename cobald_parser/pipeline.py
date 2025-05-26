@@ -1,39 +1,43 @@
 from typing import override
 
-import nltk
-from nltk.tokenize import sent_tokenize, word_tokenize
 from transformers import Pipeline
 
 from src.lemmatize_helper import reconstruct_lemma
 
 
-# Download punkt tokenizer
-nltk.download('punkt_tab')
-
-
 class ConlluTokenClassificationPipeline(Pipeline):
-    def __init__(self, model, language, **kwargs):
+    def __init__(
+        self,
+        model,
+        tokenizer: callable = None,
+        sentenizer: callable = None,
+        **kwargs
+    ):
         super().__init__(model=model, **kwargs)
-        self.language = language
+        self.tokenizer = tokenizer
+        self.sentenizer = sentenizer
 
     @override
-    def _sanitize_parameters(self, conllu: bool = False, **kwargs):
-        # capture conllu flag for postprocessing
-        return {}, {}, {'conllu': conllu}
+    def _sanitize_parameters(self, output_format: str = 'list', **kwargs):
+        if output_format not in ['list', 'str']:
+            raise ValueError(
+                f"output_format must be 'str' or 'list', not {output_format}"
+            )
+        # capture output_format for postprocessing
+        return {}, {}, {'output_format': output_format}
 
     @override
     def preprocess(self, inputs: str) -> dict:
         if not isinstance(inputs, str):
             raise ValueError("pipeline input must be string (text)")
-        
-        sentences = [sentence for sentence in sent_tokenize(inputs, self.language)]
-        # stash for later post‐processing
-        self._texts = sentences
 
+        sentences = [sentence for sentence in self.sentenizer(inputs)]
         words = [
-            [word for word in word_tokenize(sentence, preserve_line=True)]
+            [word for word in self.tokenizer(sentence)]
             for sentence in sentences
         ]
+        # stash for later post‐processing
+        self._texts = sentences
         return {"words": words}
 
     @override
@@ -41,11 +45,11 @@ class ConlluTokenClassificationPipeline(Pipeline):
         return self.model(**model_inputs, inference_mode=True)
 
     @override
-    def postprocess(self, model_outputs: dict, conllu: bool = False) -> list[dict] | str:
+    def postprocess(self, model_outputs: dict, output_format: str) -> list[dict] | str:
         sentences = self._decode_model_output(model_outputs)
         # Format sentences into CoNLL-U string if requested.
-        if conllu:
-            sentences = self._format_conllu(sentences)
+        if output_format == 'str':
+            sentences = self._format_as_conllu(sentences)
         return sentences
 
     def _decode_model_output(self, model_outputs: dict) -> list[dict]:
@@ -186,7 +190,7 @@ class ConlluTokenClassificationPipeline(Pipeline):
         return ids
 
     @staticmethod
-    def _format_conllu(sentences: list[dict]) -> str:
+    def _format_as_conllu(sentences: list[dict]) -> str:
         """
         Format a list of sentence dicts into a CoNLL-U formatted string.
         """

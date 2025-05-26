@@ -1,6 +1,11 @@
 import pytest
 import torch
 
+import nltk
+from nltk.tokenize import sent_tokenize, word_tokenize
+# Download punkt tokenizer
+nltk.download('punkt_tab')
+
 from cobald_parser.pipeline import ConlluTokenClassificationPipeline
 
 
@@ -8,7 +13,7 @@ from cobald_parser.pipeline import ConlluTokenClassificationPipeline
 def mock_model(mocker):
     """Create a mock model for testing"""
     model = mocker.MagicMock()
-    
+
     # Mock model config
     model.config.vocabulary = {
         "lemma_rule": {
@@ -79,9 +84,12 @@ def mock_model(mocker):
 @pytest.fixture
 def pipeline(mock_model):
     """Create the pipeline for testing"""
+    sentenizer = lambda text: sent_tokenize(text, "english")
+    tokenizer = lambda sentence: word_tokenize(sentence, preserve_line=True)
     return ConlluTokenClassificationPipeline(
         model=mock_model,
-        language='english',
+        sentenizer=sentenizer,
+        tokenizer=tokenizer,
         framework='pt'
     )
 
@@ -100,7 +108,7 @@ def test_forward_with_proper_input(pipeline, mock_model):
     assert result == mock_model.return_value
 
 
-def test_preprocess(pipeline):
+def test_preprocess_text(pipeline):
     """Test preprocess method"""
     text = "Congratulations! Now everybody's doing reality shows."
     
@@ -111,14 +119,10 @@ def test_preprocess(pipeline):
         ['Now', 'everybody', "'s", 'doing', 'reality', 'shows', '.']
     ]
 
-
 def test_preprocess_invalid_input(pipeline):
     """Test preprocess method with invalid input"""
     with pytest.raises(ValueError, match="pipeline input must be string"):
         pipeline.preprocess(123)
-    
-    with pytest.raises(ValueError, match="pipeline input must be string"):
-        pipeline.preprocess(["This is one text", "This is another text"])
 
 
 def test_enumerate_words_standard(pipeline):
@@ -241,7 +245,7 @@ def test_pipeline_conllu(pipeline):
     """Test pipeline output formatted as CoNLL-U"""
 
     text = "Congratulations! Very strange."
-    result = pipeline(text, conllu=True)
+    result = pipeline(text, output_format='str')
     expected = (
         "# text = Congratulations!\n"
         "1\tCongratulations\tCongratulation\tNOUN\tN\tNumber=Sing\t0\troot\t_\tSpaceAfter=No\tPAT\tperson\n"

@@ -9,7 +9,7 @@ CobaldParserConfig.register_for_auto_class()
 CobaldParser.register_for_auto_class()
 
 PIPELINE_REGISTRY.register_pipeline(
-    task="token-classification",
+    task="conllu-parsing",
     pipeline_class=ConlluTokenClassificationPipeline,
     pt_model=CobaldParser,
     type="text"

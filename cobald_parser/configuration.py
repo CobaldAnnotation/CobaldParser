@@ -40,7 +40,7 @@ class CobaldParserConfig(PretrainedConfig):
         # HACK: Tell HF hub about custom pipeline.
         # It should not be hardcoded like this but other workaround are worse imo.
         self.custom_pipelines = {
-            "cobald-parsing": {
+            "conllu-parsing": {
                 "impl": "pipeline.ConlluTokenClassificationPipeline",
                 "pt": "CobaldParser",
             }

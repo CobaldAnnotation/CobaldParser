@@ -2,9 +2,6 @@ import argparse
 
 from transformers import pipeline
 
-# Register pipeline
-import cobald_parser
-
 
 def parse_conllu_to_token_lists(filepath):
     def is_range_id(x: str) -> bool:

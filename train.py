@@ -12,7 +12,12 @@ from transformers import (
 from transformers.modelcard import parse_log_history
 from huggingface_hub import ModelCard, ModelCardData, EvalResult
 
-from cobald_parser import CobaldParserConfig, CobaldParser
+from cobald_parser import (
+    CobaldParserConfig,
+    CobaldParser,
+    ConlluTokenClassificationPipeline,
+    TASK_NAME
+)
 from src.processing import (
     preprocess,
     collate_with_padding,
@@ -131,7 +136,7 @@ class CustomTrainer(Trainer):
                 license='gpl-3.0',
                 metrics=['accuracy', 'f1'],
                 model_name=self.hub_model_id,
-                pipeline_tag='cobald-parsing', # Use the correct task name
+                pipeline_tag=TASK_NAME,
                 tags=['pytorch']
             ),
             template_str=MODELCARD_TEMPLATE,
@@ -282,5 +287,9 @@ if __name__ == "__main__":
         callbacks=[unfreeze_callback]
     )
     trainer.train(ignore_keys_for_eval=["words", "sent_ids", "texts"])
+
     # Save and push model to hub (if push_to_hub is set).
     trainer.save_model()
+
+    pipe = ConlluTokenClassificationPipeline(model)
+    pipe.push_to_hub(training_args.hub_model_id)

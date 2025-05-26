@@ -37,12 +37,4 @@ class CobaldParserConfig(PretrainedConfig):
             column: {int(k): v for k, v in labels.items()}
             for column, labels in vocabulary.items()
         }
-        # HACK: Tell HF hub about custom pipeline.
-        # It should not be hardcoded like this but other workaround are worse imo.
-        self.custom_pipelines = {
-            "conllu-parsing": {
-                "impl": "pipeline.ConlluTokenClassificationPipeline",
-                "pt": "CobaldParser",
-            }
-        }
         super().__init__(**kwargs)

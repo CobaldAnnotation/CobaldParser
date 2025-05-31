@@ -9,9 +9,8 @@ from .pipeline import ConlluTokenClassificationPipeline
 CobaldParserConfig.register_for_auto_class()
 CobaldParser.register_for_auto_class()
 
-TASK_NAME = "conllu-parsing"
 PIPELINE_REGISTRY.register_pipeline(
-    task=TASK_NAME,
+    task="conllu-parsing",
     pipeline_class=ConlluTokenClassificationPipeline,
     pt_model=AutoModel,
     type="text"

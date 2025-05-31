@@ -15,8 +15,7 @@ from huggingface_hub import ModelCard, ModelCardData, EvalResult
 from cobald_parser import (
     CobaldParserConfig,
     CobaldParser,
-    ConlluTokenClassificationPipeline,
-    TASK_NAME
+    ConlluTokenClassificationPipeline
 )
 from src.processing import (
     preprocess,
@@ -136,7 +135,7 @@ class CustomTrainer(Trainer):
                 license='gpl-3.0',
                 metrics=['accuracy', 'f1'],
                 model_name=self.hub_model_id,
-                pipeline_tag=TASK_NAME,
+                pipeline_tag='token-classification',
                 tags=['pytorch']
             ),
             template_str=MODELCARD_TEMPLATE,

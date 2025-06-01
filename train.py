@@ -1,8 +1,9 @@
 import os
 from typing import override
+from collections import defaultdict
 
 from torch.optim import AdamW
-from datasets import load_dataset
+from datasets import load_dataset, concatenate_datasets
 from transformers import (
     HfArgumentParser,
     TrainingArguments,
@@ -18,7 +19,10 @@ from cobald_parser import (
     ConlluTokenClassificationPipeline
 )
 from src.processing import (
-    preprocess,
+    transform_dataset,
+    extract_unique_labels,
+    build_schema_with_class_labels,
+    replace_none_with_ignore_index,
     collate_with_padding,
     LEMMA_RULE,
     JOINT_FEATS,
@@ -31,10 +35,38 @@ from src.processing import (
 from src.metrics import compute_metrics
 
 
-def export_vocabulary(train_dataset_features, config):
+def parse_datasets(value: str) -> list[tuple]:
+    result = []
+    datasets_configs = value.split(',')
+    for dataset_config in datasets_configs:
+        parts = dataset_config.split(':')
+        if len(parts) != 2:
+            raise ValueError(f"Dataset '{value}' is not in the format 'name:config'")
+        dataset, config = parts
+        result.append((dataset, config))
+    return result
+
+
+def build_shared_tagsets(datasets_configs: list[tuple], allowed_columns: set = None) -> dict:
+    tagsets = defaultdict(set)
+    for dataset_name, config_name in datasets_configs:
+        print(f"Load dataset {dataset_name}:{config_name}")
+        external_dataset_dict = load_dataset(dataset_name, name=config_name)
+        external_dataset_dict = transform_dataset(external_dataset_dict)
+        external_dataset = concatenate_datasets(external_dataset_dict.values())
+        for column_name in external_dataset.column_names:
+            # Skip columns that are not marked as allowed
+            if allowed_columns is not None and column_name not in allowed_columns:
+                continue
+            print(f"\tTry to extract {column_name}")
+            tagsets[column_name] |= extract_unique_labels(external_dataset, column_name)
+    return tagsets
+
+
+def update_vocabulary(config, features):
     for column in [LEMMA_RULE, JOINT_FEATS, UD_DEPREL, EUD_DEPREL, MISC, DEEPSLOT, SEMCLASS]:
-        if column in train_dataset_features:
-            labels = train_dataset_features[column].feature.names
+        if column in features:
+            labels = features[column].feature.names
             config.vocabulary[column] = dict(enumerate(labels))
 
 
@@ -233,21 +265,37 @@ if __name__ == "__main__":
     parser.add_argument('--model_config', required=True)
     parser.add_argument('--dataset_path', required=True)
     parser.add_argument('--dataset_config_name')
+    parser.add_argument('--external_datasets', type=parse_datasets, nargs="?")
     parser.add_argument('--finetune_from')
 
     # Parse command-line arguments.
     training_args, custom_args = parser.parse_args_into_dataclasses()
 
-    dataset_dict = load_dataset(
+    target_dataset_dict = load_dataset(
         custom_args.dataset_path,
         name=custom_args.dataset_config_name
     )
-    dataset_dict = preprocess(dataset_dict)
+    target_dataset_dict = transform_dataset(target_dataset_dict)
+
+    all_datasets = [(custom_args.dataset_path, custom_args.dataset_config_name)] \
+        + custom_args.external_datasets
+    tagsets = build_shared_tagsets(
+        all_datasets,
+        allowed_columns=target_dataset_dict['train'].column_names
+    )
+    schema = build_schema_with_class_labels(tagsets)
+    # Final processing.
+    target_dataset_dict = (
+        target_dataset_dict
+        .cast(schema)
+        .map(replace_none_with_ignore_index)
+        .with_format("torch")
+    )
 
     # Create and configure model.
     model_config = CobaldParserConfig.from_json_file(custom_args.model_config)
-    # Export vocabulary to config (as it must be saved along the model).
-    export_vocabulary(dataset_dict['train'].features, model_config)
+    # Load vocabulary into config (as it must be saved along the model).
+    update_vocabulary(model_config, target_dataset_dict['train'].features)
 
     # Manually set some parameters for this specific workflow to work.
     training_args.remove_unused_columns = False
@@ -278,8 +326,8 @@ if __name__ == "__main__":
     trainer = CustomTrainer(
         model=model,
         args=training_args,
-        train_dataset=dataset_dict['train'],
-        eval_dataset=dataset_dict['validation'],
+        train_dataset=target_dataset_dict['train'],
+        eval_dataset=target_dataset_dict['validation'],
         data_collator=collate_with_padding,
         # Wth? See notes at compute_metrics.
         compute_metrics=lambda x: compute_metrics(x, training_args.label_names),

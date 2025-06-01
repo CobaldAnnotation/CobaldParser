@@ -10,8 +10,7 @@ from datasets import (
     Features,
     Sequence,
     Value,
-    ClassLabel,
-    concatenate_datasets
+    ClassLabel
 )
 
 from src.lemmatize_helper import construct_lemma_rule
@@ -180,11 +179,10 @@ def extract_unique_labels(dataset, column_name) -> list[str]:
     all_labels = itertools.chain.from_iterable(dataset[column_name])
     unique_labels = set(all_labels)
     unique_labels.discard(None)
-    # Ensure consistent ordering of labels
-    return sorted(unique_labels)
+    return unique_labels
 
 
-def build_schema_with_class_labels(dataset: Dataset) -> Features:
+def build_schema_with_class_labels(tagsets: dict[str, set]) -> Features:
     """Update the schema to use ClassLabel for specified columns."""
 
     # Updated features schema
@@ -194,49 +192,50 @@ def build_schema_with_class_labels(dataset: Dataset) -> Features:
         WORD: Sequence(Value("string"))
     })
 
-    max_null_count = max(itertools.chain.from_iterable(dataset[COUNTING_MASK]))
+    max_null_count = max(tagsets[COUNTING_MASK])
     features[COUNTING_MASK] = Sequence(ClassLabel(num_classes=max_null_count + 1))
 
-    # Extract unique labels for each column that needs to be ClassLabel.
-    if LEMMA_RULE in dataset.column_names:
-        lemma_rule_tagset = extract_unique_labels(dataset, LEMMA_RULE)
+    if LEMMA_RULE in tagsets:
+        # Sort to ensure consistent ordering of labels
+        lemma_rule_tagset = sorted(tagsets[LEMMA_RULE])
         features[LEMMA_RULE] = Sequence(ClassLabel(names=lemma_rule_tagset))
 
-    if JOINT_FEATS in dataset.column_names:
-        joint_feats_tagset = extract_unique_labels(dataset, JOINT_FEATS)
-        features[JOINT_FEATS] = Sequence(ClassLabel(names=joint_feats_tagset))
+    if JOINT_FEATS in tagsets:
+        feats_tagset = sorted(tagsets[JOINT_FEATS])
+        features[JOINT_FEATS] = Sequence(ClassLabel(names=feats_tagset))
 
-    if UD_DEPREL in dataset.column_names:
+    if UD_DEPREL in tagsets:
         features[UD_ARC_FROM] = Sequence(Value('int32'))
         features[UD_ARC_TO] = Sequence(Value('int32'))
-        ud_deprels_tagset = extract_unique_labels(dataset, UD_DEPREL)
-        features[UD_DEPREL] = Sequence(ClassLabel(names=ud_deprels_tagset))
+        eud_deprels_tagset = sorted(tagsets[UD_DEPREL])
+        features[UD_DEPREL] = Sequence(ClassLabel(names=eud_deprels_tagset))
 
-    if EUD_DEPREL in dataset.column_names:
+    if EUD_DEPREL in tagsets:
         features[EUD_ARC_FROM] = Sequence(Value('int32'))
         features[EUD_ARC_TO] = Sequence(Value('int32'))
-        eud_deprels_tagset = extract_unique_labels(dataset, EUD_DEPREL)
+        eud_deprels_tagset = sorted(tagsets[EUD_DEPREL])
         features[EUD_DEPREL] = Sequence(ClassLabel(names=eud_deprels_tagset))
 
-    if MISC in dataset.column_names:
-        misc_tagset = extract_unique_labels(dataset, MISC)
+    if MISC in tagsets:
+        misc_tagset = sorted(tagsets[MISC])
         features[MISC] = Sequence(ClassLabel(names=misc_tagset))
 
-    if DEEPSLOT in dataset.column_names:
-        deepslot_tagset = extract_unique_labels(dataset, DEEPSLOT)
+    if DEEPSLOT in tagsets:
+        deepslot_tagset = sorted(tagsets[DEEPSLOT])
         features[DEEPSLOT] = Sequence(ClassLabel(names=deepslot_tagset))
 
-    if SEMCLASS in dataset.column_names:
-        semclass_tagset = extract_unique_labels(dataset, SEMCLASS)
+    if SEMCLASS in tagsets:
+        semclass_tagset = sorted(tagsets[SEMCLASS])
         features[SEMCLASS] = Sequence(ClassLabel(names=semclass_tagset))
 
     return features
 
 
-def replace_none(example: dict, value: int) -> dict:
+def replace_none_with_ignore_index(example: dict, value: int = -100) -> dict:
     """
     Replace None labels with specified value.
     """
+    assert value < 0
     for name, column in example.items():
         # Skip metadata fields (they are not lists).
         if isinstance(column, list):
@@ -244,10 +243,7 @@ def replace_none(example: dict, value: int) -> dict:
     return example
 
 
-def preprocess(dataset_dict: DatasetDict, none_value: int = -100) -> Dataset:
-    # Remove range tokens.
-    dataset_dict = dataset_dict.map(remove_range_tokens)
-
+def transform_dataset(dataset_dict: DatasetDict) -> Dataset:
     # Transform fields.
     dataset_column_names = {
         column
@@ -255,25 +251,21 @@ def preprocess(dataset_dict: DatasetDict, none_value: int = -100) -> Dataset:
         for column in columns
     }
     columns_to_remove = [ID, LEMMA, UPOS, XPOS, FEATS, HEAD, DEPREL, DEPS]
-    dataset_dict = dataset_dict.map(
-        transform_fields,
-        remove_columns=[
-            column
-            for column in columns_to_remove
-            if column in dataset_column_names
-        ]
-    )
 
-    # Encode labels (str -> int).
-    # FIXME: Should be a trainig schema with OOV and special handling in evaluation
-    # but it makes things too complicated.
-    all_data = concatenate_datasets(dataset_dict.values())
-    all_schema = build_schema_with_class_labels(all_data)
-    dataset_dict = dataset_dict.cast(all_schema)
-    # Replace None labels with ingore_index on-the-fly.
-    dataset_dict = dataset_dict.map(lambda sample: replace_none(sample, none_value))
-    # Convert list labels to tensors.
-    return dataset_dict.with_format("torch")
+    # Remove range tokens and transform fields.
+    dataset_dict = (
+        dataset_dict
+        .map(remove_range_tokens)
+        .map(
+            transform_fields,
+            remove_columns=[
+                column
+                for column in columns_to_remove
+                if column in dataset_column_names
+            ]
+        )
+    )
+    return dataset_dict
 
 
 def collate_with_padding(batches: list[dict], padding_value: int = -100) -> dict:

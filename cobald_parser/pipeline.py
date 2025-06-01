@@ -197,7 +197,7 @@ class ConlluTokenClassificationPipeline(Pipeline):
         formatted = []
         for sentence in sentences:
             # The first line is a text matadata.
-            lines = [f"# text = {sentence["text"]}"]
+            lines = [f"# text = {sentence['text']}"]
 
             id2idx = {token_id: idx for idx, token_id in enumerate(sentence['ids'])}
 

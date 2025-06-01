@@ -50,7 +50,6 @@ def parse_datasets(value: str) -> list[tuple]:
 def build_shared_tagsets(datasets_configs: list[tuple], allowed_columns: set = None) -> dict:
     tagsets = defaultdict(set)
     for dataset_name, config_name in datasets_configs:
-        print(f"Load dataset {dataset_name}:{config_name}")
         external_dataset_dict = load_dataset(dataset_name, name=config_name)
         external_dataset_dict = transform_dataset(external_dataset_dict)
         external_dataset = concatenate_datasets(external_dataset_dict.values())
@@ -58,7 +57,6 @@ def build_shared_tagsets(datasets_configs: list[tuple], allowed_columns: set = N
             # Skip columns that are not marked as allowed
             if allowed_columns is not None and column_name not in allowed_columns:
                 continue
-            print(f"\tTry to extract {column_name}")
             tagsets[column_name] |= extract_unique_labels(external_dataset, column_name)
     return tagsets
 

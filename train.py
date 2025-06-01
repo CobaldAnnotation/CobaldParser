@@ -83,8 +83,9 @@ def transfer_pretrained(model, pretrained_model):
                 # the shape of the model's classifier (e.g. hidden_size, n_classes, etc.)
                 pretrained_classifier_state = pretrained_model.classifiers[name].state_dict()
                 model.classifiers[name].load_state_dict(pretrained_classifier_state)
-            except Exception:
-                pass
+                print(f"Successfuly transfered {name} classifier")
+            except Exception as e:
+                print(f"Could not transfer {name} classifier:\n{e}")
 
 
 MODELCARD_TEMPLATE = """
@@ -283,13 +284,16 @@ if __name__ == "__main__":
     )
     target_dataset_dict = transform_dataset(target_dataset_dict)
 
-    all_datasets = [(custom_args.dataset_path, custom_args.dataset_config_name)] \
-        + custom_args.external_datasets
+    all_datasets = [(custom_args.dataset_path, custom_args.dataset_config_name)]
+    if custom_args.external_datasets:
+        all_datasets.extend(custom_args.external_datasets)
+
     tagsets = build_shared_tagsets(
         all_datasets,
         allowed_columns=target_dataset_dict['train'].column_names
     )
     schema = build_schema_with_class_labels(tagsets)
+
     # Final processing.
     target_dataset_dict = (
         target_dataset_dict

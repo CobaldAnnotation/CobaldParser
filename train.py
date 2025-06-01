@@ -265,7 +265,15 @@ if __name__ == "__main__":
     parser.add_argument('--model_config', required=True)
     parser.add_argument('--dataset_path', required=True)
     parser.add_argument('--dataset_config_name')
-    parser.add_argument('--external_datasets', type=parse_datasets, nargs="?")
+    parser.add_argument(
+        '--external_datasets',
+        type=parse_datasets,
+        nargs="?",
+        help="External datasets whose colums will be added to the model's vocabulary "
+        "in format `dataset1_path:config1_name,dataset2_path:config2_name,...` "
+        "(use `default` if no other configs exist). "
+        "Example: `CoBaLD/enhanced-cobald:en,CoBaLD/enhanced-ud-syntax:default`."
+    )
     parser.add_argument('--finetune_from')
 
     # Parse command-line arguments.

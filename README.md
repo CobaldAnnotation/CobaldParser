@@ -1,6 +1,7 @@
 # CoBaLD Parser
+[Paper](https://dialogue-conf.org/wp-content/uploads/2025/04/BaiukIBaiukAPetrovaM.009.pdf)
 
-A neural network parser that annotates texts in CoBaLD format.
+A neural-based joint morphosyntactic and semantic parser capable of automatic annotation both in E-UD and in CoBaLD, including ellipsis restoration.
 
 ## Setup
 
@@ -56,3 +57,15 @@ pipeline("This a sentence. This is another sentence.")
 Refer to [CoBaLD models](https://huggingface.co/CoBaLD), `ConlluTokenClassificationPipeline` implementation and huggingface [pipeline documentation](https://huggingface.co/docs/transformers/main/en/pipeline_tutorial) for details.
 
 To inference model on pre-tokenized texts, see `predict_pretokenized.py` script.
+
+## Citation
+
+```bibtex
+@inproceedings{baiuk2025cobald,
+  title={CoBaLD Parser: Joint Morphosyntactic and Semantic Annotation},
+  author={Baiuk, Ilia and Baiuk, Alexandra and Petrova, Maria},
+  booktitle={Proceedings of the International Conference "Dialogue"},
+  volume={I},
+  year={2025}
+}
+```

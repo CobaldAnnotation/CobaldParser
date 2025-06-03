@@ -76,7 +76,7 @@ if __name__ == "__main__":
     dummy_sentenizer = lambda sentence: [sentence]
 
     pipe = pipeline(
-        "conllu-parsing",
+        "token-classification",
         model=args.model,
         tokenizer=dummy_tokenizer,
         sentenizer=dummy_sentenizer,

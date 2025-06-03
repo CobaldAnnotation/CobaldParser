@@ -1,17 +1,10 @@
-import os
-from typing import override
 from collections import defaultdict
 
-from torch.optim import AdamW
 from datasets import load_dataset, concatenate_datasets
 from transformers import (
     HfArgumentParser,
-    TrainingArguments,
-    Trainer,
-    TrainerCallback
+    TrainingArguments
 )
-from transformers.modelcard import parse_log_history
-from huggingface_hub import ModelCard, ModelCardData, EvalResult
 
 from cobald_parser import (
     CobaldParserConfig,
@@ -32,6 +25,8 @@ from src.processing import (
     SEMCLASS,
     DEEPSLOT
 )
+from src.callbacks import GradualUnfreezeCallback
+from src.trainer import CustomTrainer
 from src.metrics import compute_metrics
 
 
@@ -75,6 +70,11 @@ def transfer_pretrained(model, pretrained_model):
     # Transfer encoder
     model.encoder = pretrained_model.encoder
 
+    a = set(model.config.vocabulary[EUD_DEPREL].items())
+    b = set(pretrained_model.config.vocabulary[EUD_DEPREL].items())
+
+    print(f"diff: {a - b}")
+
     # Transfer classifiers
     for name in model.classifiers:
         if name in pretrained_model.classifiers:
@@ -86,176 +86,6 @@ def transfer_pretrained(model, pretrained_model):
                 print(f"Successfuly transfered {name} classifier")
             except Exception as e:
                 print(f"Could not transfer {name} classifier:\n{e}")
-
-
-MODELCARD_TEMPLATE = """
----
-{{ card_data }}
----
-
-# Model Card for {{ model_name }}
-
-A transformer-based multihead parser for CoBaLD annotation.
-
-This model parses a pre-tokenized CoNLL-U text and jointly labels each token with three tiers of tags:
-* Grammatical tags (lemma, UPOS, XPOS, morphological features),
-* Syntactic tags (basic and enhanced Universal Dependencies),
-* Semantic tags (deep slot and semantic class).
-
-## Model Sources
-
-- **Repository:** https://github.com/CobaldAnnotation/CobaldParser
-- **Paper:** https://dialogue-conf.org/wp-content/uploads/2025/04/BaiukIBaiukAPetrovaM.009.pdf
-- **Demo:** [coming soon]
-
-## Citation
-
-```
-@inproceedings{baiuk2025cobald,
-  title={CoBaLD Parser: Joint Morphosyntactic and Semantic Annotation},
-  author={Baiuk, Ilia and Baiuk, Alexandra and Petrova, Maria},
-  booktitle={Proceedings of the International Conference "Dialogue"},
-  volume={I},
-  year={2025}
-}
-```
-"""
-
-
-class CustomTrainer(Trainer):
-    @override
-    def create_model_card(self, **kwargs):
-        """Create custom model card."""
-
-        dataset = self.eval_dataset
-        organization, model_name = self.hub_model_id.split('/')
-        hub_dataset_id = f"{organization}/{dataset.info.dataset_name}"
-
-        _, _, eval_results_plain = parse_log_history(self.state.log_history)
-
-        eval_results = []
-        for metric_name, metric_type in (
-            ('Null F1', 'f1'),
-            ('Lemma F1', 'f1'),
-            ('Morphology F1', 'f1'),
-            ('Ud Jaccard', 'accuracy'),
-            ('Eud Jaccard', 'accuracy'),
-            ('Miscs F1', 'f1'),
-            ('Deepslot F1', 'f1'),
-            ('Semclass F1', 'f1')
-        ):
-            if metric_name in eval_results_plain:
-                eval_result = EvalResult(
-                    task_type='token-classification',
-                    dataset_type=hub_dataset_id,
-                    dataset_name=dataset.info.dataset_name,
-                    dataset_split='validation',
-                    metric_name=metric_name,
-                    metric_type=metric_type,
-                    metric_value=eval_results_plain[metric_name]
-                )
-                eval_results.append(eval_result)
-
-        card = ModelCard.from_template(
-            card_data=ModelCardData(
-                base_model=self.model.config.encoder_model_name,
-                datasets=hub_dataset_id,
-                language=dataset.info.config_name,
-                eval_results=eval_results,
-                library_name='transformers',
-                license='gpl-3.0',
-                metrics=['accuracy', 'f1'],
-                model_name=self.hub_model_id,
-                pipeline_tag='token-classification',
-                tags=['pytorch']
-            ),
-            template_str=MODELCARD_TEMPLATE,
-            model_name=model_name
-        )
-        model_card_filepath = os.path.join(self.args.output_dir, "README.md")
-        card.save(model_card_filepath)
-
-    @override
-    def create_optimizer(self):
-        # Implement discriminative‐finetuning.
-        # NOTE: it breaks multiple CLI features like `--fp16` and `--fsdp`, but
-        # we don't need them so far anyway...
-
-        if self.optimizer is not None:
-            return self.optimizer
-        
-        base_lr = self.args.learning_rate
-        encoder_lr = base_lr / 5
-        decay = self.args.weight_decay
-        layer_decay = 0.9
-        optimizer_grouped_parameters = []
-
-        # Add classifier with the base LR
-        optimizer_grouped_parameters.append({
-            "params": self.model.classifiers.parameters(),
-            "lr": base_lr,
-            "weight_decay": decay
-        })
-        
-        # Per‐layer parameter groups with decaying LR
-        layers = self.model.encoder.get_transformer_layers()
-        for idx, layer in enumerate(layers):
-            lr = encoder_lr * (layer_decay ** (len(layers) - idx - 1))
-            optimizer_grouped_parameters.append({
-                "params": layer.parameters(),
-                "lr": lr,
-                "weight_decay": decay
-            })
-
-        # Add embeddings with the smallest LR
-        embeddings = self.model.encoder.get_embeddings_layer()
-        smallest_lr = encoder_lr * (layer_decay ** len(layers))
-        optimizer_grouped_parameters.append({
-            "params": embeddings.parameters(),
-            "lr": smallest_lr,
-            "weight_decay": decay
-        })
-
-        self.optimizer = AdamW(
-            optimizer_grouped_parameters,
-            betas=(self.args.adam_beta1, self.args.adam_beta2),
-            eps=self.args.adam_epsilon
-        )
-        return self.optimizer
-
-
-class GradualUnfreezeCallback(TrainerCallback):
-    """Unfreeze one encoder layer per epoch, deepest first."""
-
-    def __init__(self, warmup: int = 1, interval: int = 3):
-        self.warmup = warmup
-        self.interval = interval
-
-    def on_train_begin(self, args, state, control, model = None, **kwargs):
-        # Freeze encoder at start
-        for param in model.encoder.parameters():
-            param.requires_grad = False
-
-    def on_epoch_begin(self, args, state, control, model = None, **kwargs):
-        epoch = int(state.epoch)
-
-        # Keep encoder frozen during warmup
-        if epoch < self.warmup:
-            return
-        
-        layers = model.encoder.get_transformer_layers()
-        top_layer_idx = len(layers) - 1
-        last_frozen_layer_idx = top_layer_idx - epoch * self.interval
-
-        # Gradually unfreeze layers from top to bottom or unfreeze encoder entirely
-        # (e.g. including the embeddings) if all layers are already unfreezed.
-        if last_frozen_layer_idx < 0:
-            for param in model.encoder.parameters():
-                param.requires_grad = True
-        else:
-            for layer in layers[top_layer_idx:last_frozen_layer_idx:-1]:
-                for param in layer.parameters():
-                    param.requires_grad = True
 
 
 if __name__ == "__main__":

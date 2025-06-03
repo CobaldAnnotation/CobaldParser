@@ -1,6 +1,6 @@
 # CoBaLD Parser
 
-A neural network parser that annotates tokenized text (*.conllu file) in CoBaLD format.
+A neural network parser that annotates texts in CoBaLD format.
 
 ## Setup
 
@@ -30,4 +30,29 @@ For a full list of options, run `python train.py -h`.
 
 ### Predict
 
-**TODO**
+The model is integrated into huggingface pipeline ecosystem, which means no `git clone` required for model inference, just an installed `transformers` library. 
+
+Example with NLTK tokenizer/sentenizer:
+```py
+import nltk
+from nltk.tokenize import sent_tokenize, word_tokenize
+from transformers import pipeline
+
+nltk.download('punkt_tab')
+
+sentenizer = lambda text: sent_tokenize(text, "english")
+tokenizer = lambda sentence: word_tokenize(sentence, preserve_line=True)
+pipe = pipeline(
+    "token-classification",
+    model="CoBaLD/xlm-roberta-base-cobald-parser",
+    trust_remote_code=True,
+    sentenizer=sentenizer,
+    tokenizer=tokenizer
+)
+
+pipeline("This a sentence. This is another sentence.")
+```
+
+Refer to [CoBaLD models](https://huggingface.co/CoBaLD), `ConlluTokenClassificationPipeline` implementation and huggingface [pipeline documentation](https://huggingface.co/docs/transformers/main/en/pipeline_tutorial) for details.
+
+To inference model on pre-tokenized texts, see `predict_pretokenized.py` script.

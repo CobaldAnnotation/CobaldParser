@@ -46,7 +46,9 @@ def parse_conllu_to_token_lists(filepath):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="")
+    parser = argparse.ArgumentParser(
+        description="Inference model on pre-tokenized conllu texts."
+    )
 
     parser.add_argument(
         "input",
